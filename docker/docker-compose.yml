@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Backend Service
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile-backend
+    container_name: tradingagents-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - TUSHARE_TOKEN=${TUSHARE_TOKEN}
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
+    networks:
+      - tradingagents-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile-frontend
+    container_name: tradingagents-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - tradingagents-network
+    restart: unless-stopped
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: tradingagents-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - tradingagents-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+networks:
+  tradingagents-network:
+    driver: bridge
+
+volumes:
+  redis-data:

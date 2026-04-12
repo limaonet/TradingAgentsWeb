@@ -1,0 +1,128 @@
+/* CSS Variables for TradingAgents Web */
+
+:root {
+  /* Primary Colors */
+  --primary-color: #1890ff;
+  --primary-hover: #40a9ff;
+  --primary-active: #096dd9;
+  
+  /* Success Colors */
+  --success-color: #52c41a;
+  --success-hover: #73d13d;
+  --success-active: #389e0d;
+  
+  /* Warning Colors */
+  --warning-color: #faad14;
+  --warning-hover: #ffc53d;
+  --warning-active: #d48806;
+  
+  /* Error Colors */
+  --error-color: #f5222d;
+  --error-hover: #ff4d4f;
+  --error-active: #cf1322;
+  
+  /* Info Colors */
+  --info-color: #1890ff;
+  
+  /* Background Colors - Light Theme */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-tertiary: #fafafa;
+  --bg-elevated: #ffffff;
+  --bg-card: #ffffff;
+  
+  /* Text Colors - Light Theme */
+  --text-primary: rgba(0, 0, 0, 0.85);
+  --text-secondary: rgba(0, 0, 0, 0.65);
+  --text-tertiary: rgba(0, 0, 0, 0.45);
+  --text-disabled: rgba(0, 0, 0, 0.25);
+  --text-inverse: #ffffff;
+  
+  /* Border Colors */
+  --border-color: #d9d9d9;
+  --border-color-split: #f0f0f0;
+  --border-color-base: #d9d9d9;
+  
+  /* Shadow */
+  --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --box-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --box-shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.15);
+  
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-xxl: 48px;
+  
+  /* Border Radius */
+  --border-radius-sm: 2px;
+  --border-radius-md: 4px;
+  --border-radius-lg: 8px;
+  --border-radius-xl: 16px;
+  
+  /* Font Sizes */
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-xxl: 24px;
+  
+  /* Animation */
+  --transition-duration: 0.3s;
+  --transition-timing: ease-in-out;
+}
+
+/* Dark Theme */
+[data-theme='dark'] {
+  /* Background Colors - Dark Theme */
+  --bg-primary: #141414;
+  --bg-secondary: #1f1f1f;
+  --bg-tertiary: #262626;
+  --bg-elevated: #1f1f1f;
+  --bg-card: #1f1f1f;
+  
+  /* Text Colors - Dark Theme */
+  --text-primary: rgba(255, 255, 255, 0.85);
+  --text-secondary: rgba(255, 255, 255, 0.65);
+  --text-tertiary: rgba(255, 255, 255, 0.45);
+  --text-disabled: rgba(255, 255, 255, 0.25);
+  --text-inverse: #141414;
+  
+  /* Border Colors - Dark Theme */
+  --border-color: #434343;
+  --border-color-split: #303030;
+  --border-color-base: #434343;
+  
+  /* Shadow - Dark Theme */
+  --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --box-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --box-shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+/* Agent Status Colors */
+:root {
+  --agent-pending: #faad14;
+  --agent-running: #1890ff;
+  --agent-completed: #52c41a;
+  --agent-error: #f5222d;
+  
+  /* Analyst Team Colors */
+  --analyst-market: #722ed1;
+  --analyst-sentiment: #eb2f96;
+  --analyst-news: #13c2c2;
+  --analyst-fundamentals: #fa8c16;
+  
+  /* Research Team Colors */
+  --research-bull: #f5222d;
+  --research-bear: #52c41a;
+  --research-manager: #1890ff;
+  
+  /* Risk Management Colors */
+  --risk-aggressive: #fa541c;
+  --risk-conservative: #52c41a;
+  --risk-neutral: #faad14;
+  --risk-portfolio: #1890ff;
+}

@@ -1,0 +1,73 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: tradingagents-server
+  
+  websocket:
+    stomp:
+      relay:
+        host: localhost
+        port: 61613
+
+# LLM Configuration - OpenRouter (国产模型)
+llm:
+  provider: openrouter
+  openrouter:
+    api-key: ${OPENROUTER_API_KEY:}
+    base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}
+    # 深度思考模型：研究经理、组合经理等复杂决策
+    chat-model: ${DEFAULT_CHAT_MODEL:minimax/minimax-m2.7}
+    # 快速思考模型：分析师等快速响应场景
+    quick-model: ${DEFAULT_QUICK_MODEL:minimax/minimax-m2.5}
+
+# Data Source Configuration - 专注国内/港股市场
+data:
+  # 东方财富 - 主要数据源
+  eastmoney:
+    enabled: ${EASTMONEY_ENABLED:true}
+    base-url: https://push2.eastmoney.com/api
+    
+  # Tushare Pro - 备选数据源
+  tushare:
+    token: ${TUSHARE_TOKEN:}
+    base-url: https://api.tushare.pro
+    
+  # 新浪财经 - 实时行情
+  sina:
+    enabled: true
+    base-url: https://hq.sinajs.cn
+    
+  # 国内舆情数据源
+  sentiment:
+    # 雪球 - 投资者社区情绪
+    xueqiu:
+      enabled: true
+      base-url: https://xueqiu.com
+    # 东方财富股吧
+    guba:
+      enabled: true
+      base-url: https://guba.eastmoney.com
+    # 新闻舆情
+    news:
+      enabled: true
+      # 使用 Tushare 新闻接口或其他国内新闻源
+
+# Analysis Configuration
+analysis:
+  max-debate-rounds: 1
+  max-risk-discuss-rounds: 1
+  default-analysts:
+    - market
+    - social
+    - news
+    - fundamentals
+
+# Logging
+logging:
+  level:
+    com.tradingagents: DEBUG
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
