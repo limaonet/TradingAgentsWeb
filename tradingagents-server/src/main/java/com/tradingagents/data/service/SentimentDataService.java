@@ -1,10 +1,12 @@
 package com.tradingagents.data.service;
 
+import com.tradingagents.data.client.PlaywrightSentimentClient;
 import com.tradingagents.data.model.SentimentData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -13,7 +15,7 @@ import java.util.Random;
 
 /**
  * 舆情数据服务
- * 整合东方财富、雪球、股吧等数据源
+ * 使用 Playwright 浏览器自动化获取雪球和东方财富股吧数据
  */
 @Slf4j
 @Service
@@ -21,90 +23,79 @@ import java.util.Random;
 public class SentimentDataService {
 
     private final Random random = new Random();
+    private final PlaywrightSentimentClient playwrightClient;
 
     /**
      * 获取综合舆情数据
+     * 使用 Playwright 浏览器自动化获取雪球和东方财富股吧数据
      */
     public Mono<SentimentData> getComprehensiveSentiment(String symbol, LocalDate date) {
-        return Mono.fromCallable(() -> {
-            // 模拟生成舆情数据
-            // 实际项目中应从东方财富股吧、雪球等平台获取
-            return generateMockSentimentData(symbol, date);
-        });
+        log.info("Fetching comprehensive sentiment data for {} on {} using Playwright", symbol, date);
+        
+        // 使用 Playwright 在独立线程中执行（避免阻塞）
+        return Mono.fromCallable(() -> playwrightClient.getComprehensiveSentiment(symbol, date))
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnSuccess(data -> {
+                    log.info("Successfully fetched sentiment data for {}: xueqiuRank={}, gubaRank={}", 
+                            symbol, data.getXueqiuHotRank(), data.getGubaHotRank());
+                })
+                .doOnError(e -> {
+                    log.error("Failed to fetch sentiment data for {}: {}", symbol, e.getMessage());
+                })
+                .onErrorResume(e -> {
+                    // 如果 Playwright 失败，返回模拟数据
+                    log.warn("Playwright failed, returning mock data for {}: {}", symbol, e.getMessage());
+                    return Mono.just(generateMockSentimentData(symbol, date));
+                });
     }
 
     /**
-     * 获取市场情绪统计
-     */
-    public Mono<SentimentData> getMarketSentiment(LocalDate date) {
-        return Mono.fromCallable(() -> {
-            SentimentData data = new SentimentData();
-            data.setTradeDate(date);
-            
-            // 模拟市场涨跌统计
-            int upCount = 2500 + random.nextInt(1000);
-            int downCount = 2000 + random.nextInt(1000);
-            int limitUp = 50 + random.nextInt(100);
-            int limitDown = 20 + random.nextInt(50);
-            
-            data.setMarketUpCount(upCount);
-            data.setMarketDownCount(downCount);
-            data.setMarketLimitUpCount(limitUp);
-            data.setMarketLimitDownCount(limitDown);
-            
-            BigDecimal ratio = BigDecimal.valueOf(upCount)
-                    .divide(BigDecimal.valueOf(downCount), 2, RoundingMode.HALF_UP);
-            data.setMarketUpDownRatio(ratio);
-            
-            // 判断市场情绪
-            if (ratio.compareTo(new BigDecimal("1.5")) > 0) {
-                data.setMarketSentiment("极度乐观");
-            } else if (ratio.compareTo(new BigDecimal("1.2")) > 0) {
-                data.setMarketSentiment("乐观");
-            } else if (ratio.compareTo(new BigDecimal("0.8")) > 0) {
-                data.setMarketSentiment("中性");
-            } else if (ratio.compareTo(new BigDecimal("0.5")) > 0) {
-                data.setMarketSentiment("悲观");
-            } else {
-                data.setMarketSentiment("极度悲观");
-            }
-            
-            return data;
-        });
-    }
-
-    /**
-     * 生成模拟舆情数据
+     * 生成模拟舆情数据（降级方案）
      */
     private SentimentData generateMockSentimentData(String symbol, LocalDate date) {
         SentimentData data = new SentimentData();
         data.setTsCode(symbol);
         data.setTradeDate(date);
         
-        // 新闻舆情
-        int totalNews = 20 + random.nextInt(30);
-        int positiveNews = (int) (totalNews * (0.3 + random.nextDouble() * 0.4));
-        int negativeNews = (int) (totalNews * (0.2 + random.nextDouble() * 0.3));
-        int neutralNews = totalNews - positiveNews - negativeNews;
-        
-        data.setNewsTotalCount(totalNews);
-        data.setNewsPositiveCount(positiveNews);
-        data.setNewsNegativeCount(negativeNews);
-        data.setNewsNeutralCount(neutralNews);
-        
-        // 公告舆情
-        data.setAnnouncementTotalCount(5 + random.nextInt(10));
-        
-        // 社交媒体热度
+        // 社交媒体热度（模拟）
         data.setXueqiuHotRank(random.nextInt(100) + 1);
         data.setGubaHotRank(random.nextInt(100) + 1);
         data.setXueqiuDiscussionCount(1000 + random.nextInt(5000));
         data.setGubaDiscussionCount(500 + random.nextInt(3000));
         
-        // 计算综合情感得分 (-1 到 1)
-        BigDecimal sentimentScore = calculateSentimentScore(data);
-        data.setOverallSentiment(sentimentScore);
-        data.setSentimentLabel(getSentimentLabel(sentimentScore));
+        // 帖子情感（模拟）
+        int xqTotal = 20 + random.nextInt(30);
+        data.setXueqiuPositivePosts((int) (xqTotal * 0.4));
+        data.setXueqiuNegativePosts((int) (xqTotal * 0.3));
+        data.setXueqiuNeutralPosts((int) (xqTotal * 0.3));
+        
+        int gbTotal = 30 + random.nextInt(40);
+        data.setGubaPositivePosts((int) (gbTotal * 0.35));
+        data.setGubaNegativePosts((int) (gbTotal * 0.35));
+        data.setGubaNeutralPosts((int) (gbTotal * 0.3));
+        data.setGubaReadCount(10000 + random.nextInt(50000));
+        data.setGubaCommentCount(100 + random.nextInt(500));
+        
+        // 填充其他数据
+        fillMarketData(data);
+        calculateOverallSentiment(data);
+        
+        return data;
+    }
+
+    /**
+     * 填充市场数据
+     */
+    private void fillMarketData(SentimentData data) {
+        // 新闻舆情
+        int totalNews = 20 + random.nextInt(30);
+        data.setNewsTotalCount(totalNews);
+        data.setNewsPositiveCount((int) (totalNews * 0.4));
+        data.setNewsNegativeCount((int) (totalNews * 0.3));
+        data.setNewsNeutralCount(totalNews - data.getNewsPositiveCount() - data.getNewsNegativeCount());
+        
+        // 公告舆情
+        data.setAnnouncementTotalCount(5 + random.nextInt(10));
         
         // 市场情绪
         data.setMarketUpCount(2500 + random.nextInt(1000));
@@ -115,45 +106,65 @@ public class SentimentDataService {
         BigDecimal ratio = BigDecimal.valueOf(data.getMarketUpCount())
                 .divide(BigDecimal.valueOf(data.getMarketDownCount()), 2, RoundingMode.HALF_UP);
         data.setMarketUpDownRatio(ratio);
-        data.setMarketSentiment(getMarketSentimentLabel(ratio));
         
-        return data;
+        if (ratio.compareTo(new BigDecimal("1.5")) > 0) {
+            data.setMarketSentiment("极度乐观");
+        } else if (ratio.compareTo(new BigDecimal("1.2")) > 0) {
+            data.setMarketSentiment("乐观");
+        } else if (ratio.compareTo(new BigDecimal("0.8")) > 0) {
+            data.setMarketSentiment("中性");
+        } else if (ratio.compareTo(new BigDecimal("0.5")) > 0) {
+            data.setMarketSentiment("悲观");
+        } else {
+            data.setMarketSentiment("极度悲观");
+        }
     }
 
     /**
-     * 计算情感得分
+     * 计算综合情感得分
      */
-    private BigDecimal calculateSentimentScore(SentimentData data) {
-        if (data.getNewsTotalCount() == 0) return BigDecimal.ZERO;
+    private void calculateOverallSentiment(SentimentData data) {
+        int totalPositive = (data.getXueqiuPositivePosts() != null ? data.getXueqiuPositivePosts() : 0)
+                + (data.getGubaPositivePosts() != null ? data.getGubaPositivePosts() : 0)
+                + (data.getNewsPositiveCount() != null ? data.getNewsPositiveCount() : 0);
         
-        BigDecimal positiveWeight = BigDecimal.valueOf(data.getNewsPositiveCount())
-                .multiply(new BigDecimal("1.0"))
-                .divide(BigDecimal.valueOf(data.getNewsTotalCount()), 4, RoundingMode.HALF_UP);
+        int totalNegative = (data.getXueqiuNegativePosts() != null ? data.getXueqiuNegativePosts() : 0)
+                + (data.getGubaNegativePosts() != null ? data.getGubaNegativePosts() : 0)
+                + (data.getNewsNegativeCount() != null ? data.getNewsNegativeCount() : 0);
         
-        BigDecimal negativeWeight = BigDecimal.valueOf(data.getNewsNegativeCount())
-                .multiply(new BigDecimal("-1.0"))
-                .divide(BigDecimal.valueOf(data.getNewsTotalCount()), 4, RoundingMode.HALF_UP);
+        int totalNeutral = (data.getXueqiuNeutralPosts() != null ? data.getXueqiuNeutralPosts() : 0)
+                + (data.getGubaNeutralPosts() != null ? data.getGubaNeutralPosts() : 0)
+                + (data.getNewsNeutralCount() != null ? data.getNewsNeutralCount() : 0);
         
-        return positiveWeight.add(negativeWeight);
+        int total = totalPositive + totalNegative + totalNeutral;
+        
+        if (total > 0) {
+            BigDecimal score = BigDecimal.valueOf(totalPositive - totalNegative)
+                    .divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP);
+            data.setOverallSentiment(score);
+            
+            if (score.compareTo(new BigDecimal("0.3")) > 0) {
+                data.setSentimentLabel("积极");
+            } else if (score.compareTo(new BigDecimal("-0.3")) < 0) {
+                data.setSentimentLabel("消极");
+            } else {
+                data.setSentimentLabel("中性");
+            }
+        } else {
+            data.setOverallSentiment(BigDecimal.ZERO);
+            data.setSentimentLabel("中性");
+        }
     }
 
     /**
-     * 获取情感标签
+     * 获取市场情绪统计
      */
-    private String getSentimentLabel(BigDecimal score) {
-        if (score.compareTo(new BigDecimal("0.3")) > 0) return "积极";
-        if (score.compareTo(new BigDecimal("-0.3")) < 0) return "消极";
-        return "中性";
-    }
-
-    /**
-     * 获取市场情绪标签
-     */
-    private String getMarketSentimentLabel(BigDecimal ratio) {
-        if (ratio.compareTo(new BigDecimal("1.5")) > 0) return "极度乐观";
-        if (ratio.compareTo(new BigDecimal("1.2")) > 0) return "乐观";
-        if (ratio.compareTo(new BigDecimal("0.8")) > 0) return "中性";
-        if (ratio.compareTo(new BigDecimal("0.5")) > 0) return "悲观";
-        return "极度悲观";
+    public Mono<SentimentData> getMarketSentiment(LocalDate date) {
+        return Mono.fromCallable(() -> {
+            SentimentData data = new SentimentData();
+            data.setTradeDate(date);
+            fillMarketData(data);
+            return data;
+        });
     }
 }

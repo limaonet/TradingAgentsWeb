@@ -1,5 +1,6 @@
 import './assets/main.css'
 import '@/styles/variables.css'
+import '@/styles/dark-theme.css'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'

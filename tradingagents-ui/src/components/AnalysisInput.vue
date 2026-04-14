@@ -25,7 +25,7 @@
         type="primary"
         size="large"
         :loading="store.isRunning"
-        :disabled="!ticker.trim()"
+        :disabled="!ticker || !ticker.trim()"
         @click="handleStart"
         class="start-btn"
       >

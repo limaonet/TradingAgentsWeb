@@ -30,9 +30,19 @@ public class AnalysisState {
     private String ticker;
     
     /**
-     * 分析日期
+     * 分析日期（单个日期，向后兼容）
      */
     private String date;
+    
+    /**
+     * 开始日期（日期范围）
+     */
+    private String startDate;
+    
+    /**
+     * 结束日期（日期范围）
+     */
+    private String endDate;
     
     /**
      * 状态: pending, running, completed, error

@@ -46,4 +46,16 @@ public class SentimentData {
     // 综合情感得分 (-1 到 1)
     private BigDecimal overallSentiment;
     private String sentimentLabel;      // 情感标签: 积极/中性/消极
+    
+    // 扩展字段：雪球详细数据
+    private Integer xueqiuPositivePosts;    // 雪球正面帖子数
+    private Integer xueqiuNegativePosts;    // 雪球负面帖子数
+    private Integer xueqiuNeutralPosts;     // 雪球中性帖子数
+    
+    // 扩展字段：股吧详细数据
+    private Integer gubaPositivePosts;      // 股吧正面帖子数
+    private Integer gubaNegativePosts;      // 股吧负面帖子数
+    private Integer gubaNeutralPosts;       // 股吧中性帖子数
+    private Integer gubaReadCount;          // 股吧阅读数
+    private Integer gubaCommentCount;       // 股吧评论数
 }

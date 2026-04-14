@@ -47,6 +47,8 @@ public class AnalysisService {
                 .analysisId(analysisId)
                 .ticker(request.getTicker())
                 .date(request.getDate())
+                .startDate(request.getStartDate())
+                .endDate(request.getEndDate())
                 .status("running")
                 .progress(0)
                 .startTime(LocalDateTime.now())
