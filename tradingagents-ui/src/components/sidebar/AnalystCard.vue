@@ -56,6 +56,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons-vue'
+import { ANALYST_AVATARS } from '@/constants/agentVisuals'
 
 interface InsightTag {
   label: string
@@ -84,14 +85,7 @@ const emit = defineEmits<{
 }>()
 
 const avatarUrl = computed(() => {
-  // 使用占位头像服务，实际项目中替换为真实头像
-  const avatars: Record<string, string> = {
-    'market': 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&gender=male',
-    'sentiment': 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka&gender=female',
-    'news': 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mark&gender=male',
-    'fundamentals': 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sara&gender=female',
-  }
-  return avatars[props.avatar] || avatars['market']
+  return ANALYST_AVATARS[props.avatar] || ANALYST_AVATARS.default
 })
 
 const confidenceClass = computed(() => {
@@ -144,6 +138,7 @@ const statusText = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
@@ -151,12 +146,18 @@ const statusText = computed(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  flex: 1;
 }
 
 .avatar {
   position: relative;
   width: 48px;
   height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  flex-shrink: 0;
+  aspect-ratio: 1;
   border-radius: 50%;
   border: 2px solid var(--border-color);
   overflow: hidden;
@@ -167,6 +168,7 @@ const statusText = computed(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .avatar.running {
@@ -217,11 +219,13 @@ const statusText = computed(() => {
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
+  word-break: break-word;
 }
 
 .agent-role {
   font-size: 12px;
   color: var(--text-secondary);
+  word-break: break-word;
 }
 
 .confidence-badge {
@@ -346,5 +350,18 @@ const statusText = computed(() => {
   color: var(--text-muted);
   min-width: 50px;
   text-align: right;
+}
+
+@media (max-width: 920px) {
+  .analyst-card {
+    padding: 12px;
+  }
+
+  .avatar {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
 }
 </style>

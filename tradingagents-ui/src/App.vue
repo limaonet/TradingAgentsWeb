@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+import ReportViewerModal from '@/components/common/ReportViewerModal.vue'
 </script>
 
 <template>
   <RouterView />
+  <ReportViewerModal />
 </template>
 
 <style>

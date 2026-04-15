@@ -29,7 +29,7 @@ public class FundamentalsAnalystAgent {
      * 执行基本面分析
      */
     public String analyze(String analysisId, String symbol, String date) {
-        log.info("Fundamentals Analyst starting analysis for {} on {}", symbol, date);
+        log.info("【基本面分析师】开始分析 标的={} 日期={}", symbol, date);
         progressHandler.sendAgentStatus(analysisId, "fundamentals_analyst", "running", "正在获取财务数据...");
         
         try {
@@ -39,6 +39,14 @@ public class FundamentalsAnalystAgent {
             
             // 获取基本面数据
             FundamentalData fundamentalData = stockDataService.getFundamentalData(symbol, period).block();
+            if (fundamentalData == null) {
+                throw new IllegalStateException("未获取到基本面数据: " + symbol);
+            }
+            if (fundamentalData.getRoe() == null
+                    && fundamentalData.getPeRatio() == null
+                    && fundamentalData.getOperatingCashFlow() == null) {
+                throw new IllegalStateException("基本面关键指标缺失，无法完成分析: " + symbol);
+            }
             
             progressHandler.sendAgentStatus(analysisId, "fundamentals_analyst", "running", "正在分析财务指标...");
             
@@ -52,11 +60,11 @@ public class FundamentalsAnalystAgent {
             progressHandler.sendAgentStatus(analysisId, "fundamentals_analyst", "completed", "基本面分析完成");
             progressHandler.sendReport(analysisId, "fundamentals_report", report);
             
-            log.info("Fundamentals Analyst completed analysis for {}", symbol);
+            log.info("【基本面分析师】分析完成 标的={}", symbol);
             return report;
             
         } catch (Exception e) {
-            log.error("Fundamentals Analyst failed for {}: {}", symbol, e.getMessage());
+            log.error("【基本面分析师】失败 标的={} 原因：{}", symbol, e.getMessage());
             progressHandler.sendError(analysisId, "fundamentals_analyst", e.getMessage());
             throw new RuntimeException("基本面分析失败", e);
         }

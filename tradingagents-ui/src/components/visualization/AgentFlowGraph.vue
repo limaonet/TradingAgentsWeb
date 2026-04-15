@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
 import { Graph } from '@antv/g6'
 import { useAnalysisStore, type NodeStatus } from '@/stores/analysisStore'
 
@@ -24,19 +24,6 @@ const STATUS_COLORS: Record<NodeStatus, string> = {
   error: '#f5222d',
 }
 
-// 固定的流程图数据
-const FLOW_NODES = [
-  { id: 'market_analyst', data: { label: '📊 市场分析师', phase: 1 } },
-  { id: 'sentiment_analyst', data: { label: '💭 情绪分析师', phase: 1 } },
-  { id: 'fundamentals_analyst', data: { label: '📈 基本面分析师', phase: 1 } },
-  { id: 'research_manager', data: { label: '👨‍💼 研究经理', phase: 2 } },
-  { id: 'trader', data: { label: '💼 交易员', phase: 3 } },
-  { id: 'aggressive_risk', data: { label: '⚡ 激进派', phase: 4 } },
-  { id: 'conservative_risk', data: { label: '🛡️ 保守派', phase: 4 } },
-  { id: 'neutral_risk', data: { label: '⚖️ 中立派', phase: 4 } },
-  { id: 'portfolio_manager', data: { label: '🎯 组合经理', phase: 5 } },
-]
-
 const FLOW_EDGES = [
   { source: 'market_analyst', target: 'research_manager' },
   { source: 'sentiment_analyst', target: 'research_manager' },
@@ -49,6 +36,30 @@ const FLOW_EDGES = [
   { source: 'conservative_risk', target: 'portfolio_manager' },
   { source: 'neutral_risk', target: 'portfolio_manager' },
 ]
+
+const FLOW_NODE_ORDER = [
+  'market_analyst',
+  'sentiment_analyst',
+  'fundamentals_analyst',
+  'research_manager',
+  'trader',
+  'aggressive_risk',
+  'conservative_risk',
+  'neutral_risk',
+  'portfolio_manager',
+]
+
+const flowNodes = computed(() =>
+  FLOW_NODE_ORDER
+    .filter((id) => Boolean(store.nodes[id]))
+    .map((id) => ({
+      id,
+      data: {
+        label: `${store.AGENT_META[id]?.icon || ''} ${store.nodes[id]?.name || id}`.trim(),
+        phase: store.nodes[id]?.phase || 0,
+      },
+    }))
+)
 
 function getNodeColor(nodeId: string): string {
   const status = store.nodes[nodeId]?.status || 'idle'
@@ -93,7 +104,7 @@ function initGraph() {
           return status === 'running' || store.selectedNodeId === d.id ? 3 : 0
         },
         cursor: 'pointer',
-        labelText: (d: any) => d.data?.label || d.id,
+      labelText: (d: any) => d.data?.label || d.id,
         labelFill: '#fff',
         labelFontSize: 13,
         labelFontWeight: 600,
@@ -112,7 +123,7 @@ function initGraph() {
       },
     },
     data: {
-      nodes: FLOW_NODES,
+      nodes: flowNodes.value,
       edges: FLOW_EDGES,
     },
   })
@@ -133,7 +144,7 @@ function refreshStyles() {
   if (!graph) return
   // 重新设置数据触发重渲染
   graph.setData({
-    nodes: FLOW_NODES.map(n => ({ ...n })),
+    nodes: flowNodes.value.map(n => ({ ...n })),
     edges: FLOW_EDGES.map(e => ({ ...e })),
   })
   graph.render()

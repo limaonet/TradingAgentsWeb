@@ -23,7 +23,7 @@ public class TraderAgent {
      * 生成交易计划
      */
     public String generateTradePlan(String analysisId, String symbol, String date, String investmentPlan) {
-        log.info("Trader generating trade plan for {}", symbol);
+        log.info("【交易员】正在生成交易计划 标的={}", symbol);
         progressHandler.sendAgentStatus(analysisId, "trader", "running", "正在制定交易计划...");
         
         try {
@@ -37,11 +37,11 @@ public class TraderAgent {
             progressHandler.sendAgentStatus(analysisId, "trader", "completed", "交易计划生成完成");
             progressHandler.sendReport(analysisId, "trader_plan", plan);
             
-            log.info("Trader completed trade plan for {}", symbol);
+            log.info("【交易员】交易计划已生成 标的={}", symbol);
             return plan;
             
         } catch (Exception e) {
-            log.error("Trader failed for {}: {}", symbol, e.getMessage());
+            log.error("【交易员】失败 标的={} 原因：{}", symbol, e.getMessage());
             progressHandler.sendError(analysisId, "trader", e.getMessage());
             throw new RuntimeException("交易计划生成失败", e);
         }

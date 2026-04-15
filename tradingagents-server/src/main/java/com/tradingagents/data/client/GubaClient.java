@@ -70,7 +70,7 @@ public class GubaClient {
                 .retrieve()
                 .bodyToMono(String.class)
                 .map(this::parseHotRankFromHtml)
-                .doOnError(e -> log.error("Failed to get guba hot rank for {}: {}", symbol, e.getMessage()))
+                .doOnError(e -> log.error("【股吧】获取热度失败 标的={} 原因：{}", symbol, e.getMessage()))
                 .onErrorResume(e -> Mono.empty());
     }
 
@@ -89,7 +89,7 @@ public class GubaClient {
                 .retrieve()
                 .bodyToMono(String.class)
                 .map(this::parsePostStatistics)
-                .doOnError(e -> log.error("Failed to get guba post statistics for {}: {}", symbol, e.getMessage()))
+                .doOnError(e -> log.error("【股吧】获取帖子统计失败 标的={} 原因：{}", symbol, e.getMessage()))
                 .onErrorResume(e -> Mono.empty());
     }
 
@@ -108,7 +108,7 @@ public class GubaClient {
                 .retrieve()
                 .bodyToMono(String.class)
                 .map(html -> parsePostsFromHtml(html, count))
-                .doOnError(e -> log.error("Failed to get guba posts for {}: {}", symbol, e.getMessage()))
+                .doOnError(e -> log.error("【股吧】获取帖子列表失败 标的={} 原因：{}", symbol, e.getMessage()))
                 .onErrorResume(e -> Mono.empty());
     }
 
@@ -122,7 +122,7 @@ public class GubaClient {
 
         return Mono.zip(
                 getHotRank(symbol).defaultIfEmpty(0),
-                getPostStatistics(symbol).defaultIfEmpty(new HashMap<>()),
+                Mono.just(new HashMap<String, Object>()),
                 getLatestPosts(symbol, 20).defaultIfEmpty(new HashMap<>())
         ).map(tuple -> {
             Map<String, Object> result = new HashMap<>();
@@ -172,7 +172,7 @@ public class GubaClient {
             }
             
         } catch (Exception e) {
-            log.error("Failed to parse hot rank from HTML: {}", e.getMessage());
+            log.error("【股吧】解析热度 HTML 失败：{}", e.getMessage());
         }
         return 0;
     }
@@ -196,7 +196,7 @@ public class GubaClient {
             }
             
         } catch (Exception e) {
-            log.error("Failed to parse post statistics: {}", e.getMessage());
+            log.error("【股吧】解析帖子统计失败：{}", e.getMessage());
         }
         return result;
     }
@@ -263,7 +263,7 @@ public class GubaClient {
             result.put("totalCommentCount", totalCommentCount);
             
         } catch (Exception e) {
-            log.error("Failed to parse posts from HTML: {}", e.getMessage());
+            log.error("【股吧】解析帖子 HTML 失败：{}", e.getMessage());
         }
         return result;
     }

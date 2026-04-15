@@ -27,7 +27,7 @@
           <p>{{ node.status === 'idle' ? '等待执行' : '准备中...' }}</p>
         </div>
         <!-- 报告内容 -->
-        <div v-else class="report-content" v-html="renderMarkdown(node.content)"></div>
+        <div v-else class="report-content" v-html="simpleMarkdownToHtml(node.content)"></div>
       </div>
     </template>
 
@@ -42,6 +42,7 @@
 import { computed } from 'vue'
 import { CloseOutlined } from '@ant-design/icons-vue'
 import { useAnalysisStore } from '@/stores/analysisStore'
+import { simpleMarkdownToHtml } from '@/utils/simpleMarkdown'
 
 const store = useAnalysisStore()
 const node = computed(() => store.selectedNode)
@@ -68,20 +69,6 @@ const statusLabel = (status: string) => {
   }
 }
 
-const renderMarkdown = (text: string) => {
-  if (!text) return '<p style="color:var(--text-tertiary)">暂无内容</p>'
-  return text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
-    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
-    .replace(/\n{2,}/g, '</p><p>')
-    .replace(/\n/g, '<br>')
-    .replace(/^/, '<p>').replace(/$/, '</p>')
-}
 </script>
 
 <style scoped>

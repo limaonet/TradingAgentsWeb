@@ -32,6 +32,15 @@
             {{ risk }}
           </li>
         </ul>
+        <a-button
+          v-if="fullReport?.trim()"
+          type="link"
+          size="small"
+          class="full-report-btn"
+          @click="emit('view-full-report')"
+        >
+          查看完整决策全文
+        </a-button>
       </div>
     </div>
   </div>
@@ -54,6 +63,12 @@ const props = defineProps<{
   confidence: number
   actions: Action[]
   risks: string[]
+  /** 组合经理完整输出，用于弹窗查看 */
+  fullReport?: string
+}>()
+
+const emit = defineEmits<{
+  'view-full-report': []
 }>()
 
 const decisionClass = computed(() => {
@@ -69,9 +84,11 @@ const decisionClass = computed(() => {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   height: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overflow-x: hidden;
 }
 
 .panel-header {
@@ -97,8 +114,30 @@ const decisionClass = computed(() => {
 
 .decision-content {
   flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 20px;
+  min-width: 0;
+  scrollbar-color: rgba(59, 130, 246, 0.45) var(--bg-input);
+}
+
+.decision-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.decision-content::-webkit-scrollbar-track {
+  background: var(--bg-input);
+  border-radius: 4px;
+}
+
+.decision-content::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.45);
+  border-radius: 4px;
+}
+
+.decision-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.65);
 }
 
 .conclusion-section {
@@ -119,6 +158,9 @@ const decisionClass = computed(() => {
 .conclusion-value {
   font-size: 28px;
   font-weight: 700;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 .conclusion-value.bull {
@@ -164,6 +206,14 @@ const decisionClass = computed(() => {
   padding: 8px 0;
   font-size: 13px;
   color: var(--text-secondary);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.full-report-btn {
+  padding-left: 0;
+  margin-top: 8px;
+  height: auto;
 }
 
 .risk-dot {
@@ -172,5 +222,15 @@ const decisionClass = computed(() => {
   border-radius: 50%;
   background: var(--color-neutral);
   flex-shrink: 0;
+}
+
+@media (max-width: 1200px) {
+  .decision-content {
+    padding: 16px;
+  }
+
+  .conclusion-value {
+    font-size: 24px;
+  }
 }
 </style>

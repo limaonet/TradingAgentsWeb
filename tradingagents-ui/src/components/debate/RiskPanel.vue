@@ -4,8 +4,12 @@
       v-for="(risk, index) in risks"
       :key="index"
       class="risk-item"
-      :class="risk.level"
+      :class="[risk.level, { clickable: Boolean(risk.fullReport?.trim()) }]"
       :style="{ animationDelay: `${index * 150}ms` }"
+      role="button"
+      tabindex="0"
+      @click="onOpen(risk)"
+      @keydown.enter.prevent="onOpen(risk)"
     >
       <div class="risk-header">
         <div class="risk-avatar">
@@ -31,25 +35,32 @@
 
 <script setup lang="ts">
 import { SafetyOutlined } from '@ant-design/icons-vue'
+import { RISK_AVATARS } from '@/constants/agentVisuals'
 
 interface Risk {
   name: string
   level: 'high' | 'medium' | 'low'
   description: string
   suggestion: string
+  fullReport?: string
 }
 
 const props = defineProps<{
   risks: Risk[]
 }>()
 
+const emit = defineEmits<{
+  'open-detail': [payload: { name: string; content: string }]
+}>()
+
+const onOpen = (risk: Risk) => {
+  const content = risk.fullReport?.trim()
+  if (!content) return
+  emit('open-detail', { name: risk.name, content })
+}
+
 const getAvatar = (index: number) => {
-  const avatars = [
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=RiskA&gender=male',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=RiskB&gender=female',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=RiskC&gender=male',
-  ]
-  return avatars[index % avatars.length]
+  return RISK_AVATARS[index % RISK_AVATARS.length]
 }
 
 const levelText = (level: string) => {
@@ -78,6 +89,15 @@ const levelText = (level: string) => {
   animation-fill-mode: both;
 }
 
+.risk-item.clickable {
+  cursor: pointer;
+}
+
+.risk-item.clickable:hover {
+  border-color: var(--border-glow-blue);
+  box-shadow: var(--glow-blue);
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -103,7 +123,7 @@ const levelText = (level: string) => {
 
 .risk-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   margin-bottom: 10px;
 }
@@ -111,6 +131,10 @@ const levelText = (level: string) => {
 .risk-avatar {
   width: 32px;
   height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  flex-shrink: 0;
+  aspect-ratio: 1;
   border-radius: 50%;
   overflow: hidden;
   border: 2px solid var(--border-color);
@@ -120,19 +144,25 @@ const levelText = (level: string) => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .risk-info {
   flex: 1;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
 }
 
 .risk-name {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
+  line-height: 1.3;
+  word-break: break-word;
+  flex: 1;
 }
 
 .risk-level {
@@ -140,6 +170,8 @@ const levelText = (level: string) => {
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .risk-level.high {
@@ -177,5 +209,23 @@ const levelText = (level: string) => {
   background: rgba(59, 130, 246, 0.1);
   padding: 6px 10px;
   border-radius: var(--radius-sm);
+  word-break: break-word;
+}
+
+@media (max-width: 1200px) {
+  .risk-content {
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 920px) {
+  .risk-item {
+    padding: 12px;
+  }
+
+  .risk-avatar {
+    width: 28px;
+    height: 28px;
+  }
 }
 </style>

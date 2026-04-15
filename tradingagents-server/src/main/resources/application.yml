@@ -38,6 +38,13 @@ data:
   sina:
     enabled: true
     base-url: https://hq.sinajs.cn
+    kline-base-url: https://quotes.sina.cn
+
+  # 股票代码解析（名称 -> 代码）
+  symbol-resolver:
+    enabled: true
+    base-url: https://searchapi.eastmoney.com
+    token: ${EASTMONEY_SEARCH_TOKEN:D43BF722C8E33BDC906FB84D85E326E8}
     
   # 国内舆情数据源
   sentiment:
@@ -56,7 +63,7 @@ data:
     # 新闻舆情
     news:
       enabled: true
-      # 使用 Tushare 新闻接口或其他国内新闻源
+      base-url: https://finance.sina.com.cn
 
 # Analysis Configuration
 analysis:

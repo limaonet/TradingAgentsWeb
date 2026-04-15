@@ -25,7 +25,7 @@ public class RiskManagementAgents {
     public String aggressiveAnalysis(String analysisId, String symbol, String date, 
                                       String marketReport, String sentimentReport,
                                       String fundamentalsReport, String tradePlan) {
-        log.info("Aggressive debater analyzing {}", symbol);
+        log.info("【风控-激进派】辩论分析中 标的={}", symbol);
         progressHandler.sendDebateUpdate(analysisId, "risk", "aggressive", "激进派正在分析...", 1);
         
         try {
@@ -39,7 +39,7 @@ public class RiskManagementAgents {
             return analysis;
             
         } catch (Exception e) {
-            log.error("Aggressive debater failed: {}", e.getMessage());
+            log.error("【风控-激进派】失败 原因：{}", e.getMessage());
             throw new RuntimeException("激进派分析失败", e);
         }
     }
@@ -50,7 +50,7 @@ public class RiskManagementAgents {
     public String conservativeAnalysis(String analysisId, String symbol, String date,
                                         String marketReport, String sentimentReport,
                                         String fundamentalsReport, String tradePlan) {
-        log.info("Conservative debater analyzing {}", symbol);
+        log.info("【风控-保守派】辩论分析中 标的={}", symbol);
         progressHandler.sendDebateUpdate(analysisId, "risk", "conservative", "保守派正在分析...", 1);
         
         try {
@@ -64,7 +64,7 @@ public class RiskManagementAgents {
             return analysis;
             
         } catch (Exception e) {
-            log.error("Conservative debater failed: {}", e.getMessage());
+            log.error("【风控-保守派】失败 原因：{}", e.getMessage());
             throw new RuntimeException("保守派分析失败", e);
         }
     }
@@ -76,7 +76,7 @@ public class RiskManagementAgents {
                                    String marketReport, String sentimentReport,
                                    String fundamentalsReport, String tradePlan,
                                    String aggressiveView, String conservativeView) {
-        log.info("Neutral debater analyzing {}", symbol);
+        log.info("【风控-中立派】辩论分析中 标的={}", symbol);
         progressHandler.sendDebateUpdate(analysisId, "risk", "neutral", "中立派正在整合观点...", 2);
         
         try {
@@ -91,7 +91,7 @@ public class RiskManagementAgents {
             return analysis;
             
         } catch (Exception e) {
-            log.error("Neutral debater failed: {}", e.getMessage());
+            log.error("【风控-中立派】失败 原因：{}", e.getMessage());
             throw new RuntimeException("中立派分析失败", e);
         }
     }

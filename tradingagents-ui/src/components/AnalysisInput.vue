@@ -1,21 +1,29 @@
 <template>
   <div class="analysis-input">
     <div class="input-row">
-      <a-input
+      <a-auto-complete
         v-model:value="ticker"
-        placeholder="股票代码 如 600519 或名称 贵州茅台"
+        :options="symbolOptions"
+        :disabled="store.analysisBusy"
         class="ticker-input"
-        :disabled="store.isRunning"
-        @pressEnter="handleStart"
+        :filter-option="false"
+        @search="handleTickerSearch"
+        @select="handleTickerSelect"
       >
-        <template #prefix>
-          <SearchOutlined />
-        </template>
-      </a-input>
+        <a-input
+          placeholder="股票代码/名称，如 600519 或 贵州茅台"
+          :disabled="store.analysisBusy"
+          @pressEnter="handleStart"
+        >
+          <template #prefix>
+            <SearchOutlined />
+          </template>
+        </a-input>
+      </a-auto-complete>
 
       <a-range-picker
         v-model:value="dateRange"
-        :disabled="store.isRunning"
+        :disabled="store.analysisBusy"
         class="date-picker"
         format="YYYY-MM-DD"
         :placeholder="['开始日期', '结束日期']"
@@ -24,13 +32,13 @@
       <a-button
         type="primary"
         size="large"
-        :loading="store.isRunning"
-        :disabled="!ticker || !ticker.trim()"
+        :loading="store.analysisBusy"
+        :disabled="!ticker || !ticker.trim() || store.analysisBusy"
         @click="handleStart"
         class="start-btn"
       >
         <template #icon><ThunderboltOutlined /></template>
-        {{ store.isRunning ? '分析中...' : '开始分析' }}
+        {{ store.analysisBusy ? '分析中...' : '开始分析' }}
       </a-button>
 
       <a-button
@@ -43,7 +51,7 @@
     </div>
 
     <!-- 进度条 -->
-    <div v-if="store.isRunning || store.status === 'completed'" class="progress-bar">
+    <div v-if="store.analysisBusy || store.status === 'running' || store.status === 'completed'" class="progress-bar">
       <a-progress
         :percent="store.progress"
         :status="store.status === 'error' ? 'exception' : store.status === 'completed' ? 'success' : 'active'"
@@ -51,7 +59,7 @@
         size="small"
       />
       <div class="progress-info">
-        <span v-if="store.isRunning && store.currentAgent" class="current-agent">
+        <span v-if="store.status === 'running' && store.currentAgent" class="current-agent">
           {{ store.AGENT_META[store.currentAgent]?.icon }}
           {{ store.AGENT_META[store.currentAgent]?.name || store.currentAgent }} 执行中...
         </span>
@@ -64,22 +72,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onBeforeUnmount } from 'vue'
 import { SearchOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useAnalysisStore } from '@/stores/analysisStore'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { startAnalysis } from '@/api/analysisApi'
+import { searchSymbols, startAnalysis, type SymbolSearchItem } from '@/api/analysisApi'
 import { message } from 'ant-design-vue'
 
 const store = useAnalysisStore()
 const { connect, disconnect } = useWebSocket()
 
 const ticker = ref('')
+const selectedTickerLabel = ref('')
+const symbolOptions = ref<{ value: string; label: string }[]>([])
 const dateRange = ref<[Dayjs, Dayjs]>([
   dayjs().subtract(60, 'day'),
   dayjs(),
 ])
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const formatTime = (seconds: number) => {
   const m = Math.floor(seconds / 60)
@@ -88,29 +99,63 @@ const formatTime = (seconds: number) => {
 }
 
 const handleStart = async () => {
-  if (!ticker.value.trim() || store.isRunning) return
+  if (!ticker.value.trim() || store.analysisBusy) return
 
   const [start, end] = dateRange.value
   const dateStr = end.format('YYYY-MM-DD')
 
+  store.setAnalysisStarting(true)
   try {
     const resp = await startAnalysis({
       ticker: ticker.value.trim(),
       date: dateStr,
     })
 
-    store.startAnalysis(resp.analysisId, ticker.value.trim(), dateStr)
+    store.startAnalysis(resp.analysisId, selectedTickerLabel.value || ticker.value.trim(), dateStr)
     connect(resp.analysisId)
-    message.success(`开始分析 ${ticker.value.trim()}`)
+    message.success(`开始分析 ${selectedTickerLabel.value || ticker.value.trim()}`)
   } catch (e: any) {
     message.error('启动分析失败：' + (e.message || '网络错误'))
+  } finally {
+    store.setAnalysisStarting(false)
   }
+}
+
+const handleTickerSearch = (value: string) => {
+  if (store.analysisBusy) return
+  const keyword = value.trim()
+  selectedTickerLabel.value = ''
+  if (!keyword) {
+    symbolOptions.value = []
+    return
+  }
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(async () => {
+    try {
+      const result = await searchSymbols(keyword, 10)
+      symbolOptions.value = result.map((item: SymbolSearchItem) => ({
+        value: item.code,
+        label: `${item.name} (${item.code})`,
+      }))
+    } catch {
+      symbolOptions.value = []
+    }
+  }, 250)
+}
+
+const handleTickerSelect = (value: string, option: any) => {
+  ticker.value = value
+  selectedTickerLabel.value = option?.label || value
 }
 
 const handleReset = () => {
   disconnect()
   store.reset()
 }
+
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+})
 </script>
 
 <style scoped>

@@ -27,7 +27,7 @@ public class PortfolioManagerAgent {
                                         String fundamentalsReport, String investmentPlan,
                                         String tradePlan, String aggressiveView,
                                         String conservativeView, String neutralView) {
-        log.info("Portfolio Manager generating final decision for {}", symbol);
+        log.info("【组合经理】正在生成最终决策 标的={}", symbol);
         progressHandler.sendAgentStatus(analysisId, "portfolio_manager", "running", "正在生成最终决策...");
         
         try {
@@ -43,11 +43,11 @@ public class PortfolioManagerAgent {
             progressHandler.sendAgentStatus(analysisId, "portfolio_manager", "completed", "最终决策生成完成");
             progressHandler.sendComplete(analysisId, decision);
             
-            log.info("Portfolio Manager completed final decision for {}", symbol);
+            log.info("【组合经理】最终决策已生成 标的={}", symbol);
             return decision;
             
         } catch (Exception e) {
-            log.error("Portfolio Manager failed for {}: {}", symbol, e.getMessage());
+            log.error("【组合经理】失败 标的={} 原因：{}", symbol, e.getMessage());
             progressHandler.sendError(analysisId, "portfolio_manager", e.getMessage());
             throw new RuntimeException("最终决策生成失败", e);
         }

@@ -2,6 +2,7 @@ package com.tradingagents.data.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.tradingagents.data.client.EastMoneyClient;
+import com.tradingagents.data.client.SinaMarketClient;
 import com.tradingagents.data.model.FundamentalData;
 import com.tradingagents.data.model.StockData;
 import com.tradingagents.data.model.TechnicalIndicators;
@@ -27,22 +28,35 @@ import java.util.Map;
 public class StockDataService {
 
     private final EastMoneyClient eastMoneyClient;
+    private final SinaMarketClient sinaMarketClient;
 
     /**
      * 获取股票历史数据
      */
     public Mono<List<StockData>> getStockHistory(String symbol, LocalDate startDate, LocalDate endDate) {
+        validateSymbol(symbol);
         int days = (int) (endDate.toEpochDay() - startDate.toEpochDay()) + 10;
-        
-        return eastMoneyClient.getKlineData(symbol, 101, days)
-                .map(klineData -> parseKlineData(symbol, klineData))
-                .defaultIfEmpty(new ArrayList<>());
+
+        // 市场数据改为新浪优先；东方财富作为兜底
+        return sinaMarketClient.getDailyKline(symbol, days)
+                .onErrorResume(sinaError -> {
+                    log.warn("【行情】新浪 K 线不可用，标的={}，将改用东方财富兜底。原因：{}", symbol, sinaError.getMessage());
+                    return eastMoneyClient.getKlineData(symbol, 101, days)
+                            .map(klineData -> parseKlineData(symbol, klineData));
+                })
+                .flatMap(history -> {
+                    if (history == null || history.isEmpty()) {
+                        return Mono.error(new IllegalStateException("No stock history data for symbol " + symbol));
+                    }
+                    return Mono.just(history);
+                });
     }
 
     /**
      * 获取技术指标
      */
     public Mono<TechnicalIndicators> getTechnicalIndicators(String symbol, LocalDate date) {
+        validateSymbol(symbol);
         return getStockHistory(symbol, date.minusDays(100), date)
                 .map(history -> calculateIndicators(symbol, history));
     }
@@ -51,6 +65,7 @@ public class StockDataService {
      * 获取基本面数据
      */
     public Mono<FundamentalData> getFundamentalData(String symbol, String period) {
+        validateSymbol(symbol);
         // 东方财富不直接提供财务数据，返回模拟数据
         // 实际项目中可以接入其他财务数据源
         return Mono.just(createMockFundamentalData(symbol, period));
@@ -60,7 +75,18 @@ public class StockDataService {
      * 获取实时行情
      */
     public Mono<Map<String, Object>> getRealtimeQuote(String symbol) {
+        validateSymbol(symbol);
         return eastMoneyClient.getRealtimeQuote(symbol);
+    }
+
+    private void validateSymbol(String symbol) {
+        if (symbol == null || symbol.isBlank()) {
+            throw new IllegalArgumentException("Invalid symbol: symbol is blank");
+        }
+        String normalized = symbol.trim();
+        if (!normalized.matches("\\d{6}") && !normalized.matches("[01]\\.\\d{6}")) {
+            throw new IllegalArgumentException("Invalid symbol format: " + symbol + ", expected 6-digit A-share code");
+        }
     }
 
     /**
@@ -90,7 +116,7 @@ public class StockDataService {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to parse kline data: {}", e.getMessage());
+            log.error("【行情】解析 K 线数据失败：{}", e.getMessage());
         }
         
         return result;

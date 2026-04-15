@@ -42,7 +42,7 @@ public class LangChain4jConfig {
     @Bean
     @Primary
     public ChatLanguageModel deepThinkingModel() {
-        log.info("Initializing deep thinking model with provider: {}", provider);
+        log.info("【LLM】正在初始化深度思考模型，provider={}", provider);
         
         return OpenAiChatModel.builder()
                 .apiKey(openrouterApiKey)
@@ -61,7 +61,7 @@ public class LangChain4jConfig {
      */
     @Bean
     public ChatLanguageModel quickThinkingModel() {
-        log.info("Initializing quick thinking model with provider: {}", provider);
+        log.info("【LLM】正在初始化快速模型，provider={}", provider);
         
         return OpenAiChatModel.builder()
                 .apiKey(openrouterApiKey)

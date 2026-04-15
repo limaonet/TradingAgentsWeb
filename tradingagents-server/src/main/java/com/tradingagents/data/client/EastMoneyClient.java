@@ -55,15 +55,27 @@ public class EastMoneyClient {
      * 获取股票代码映射（东方财富格式）
      */
     private String convertToEastMoneyCode(String symbol) {
+        if (symbol == null || symbol.isBlank()) {
+            throw new IllegalArgumentException("Invalid symbol: symbol is blank");
+        }
+
+        String normalized = symbol.trim();
+
+        // 已经是东方财富格式，例如 1.600000 或 0.000001
+        if (normalized.matches("[01]\\.\\d{6}")) {
+            return normalized;
+        }
+
         // A股代码转换
-        if (symbol.matches("\\d{6}")) {
-            if (symbol.startsWith("6")) {
-                return "1." + symbol;  // 上海
+        if (normalized.matches("\\d{6}")) {
+            if (normalized.startsWith("6")) {
+                return "1." + normalized;  // 上海
             } else {
-                return "0." + symbol;  // 深圳
+                return "0." + normalized;  // 深圳
             }
         }
-        return symbol;
+
+        throw new IllegalArgumentException("Invalid symbol format: " + symbol + ", expected 6-digit A-share code");
     }
 
     /**
@@ -85,7 +97,7 @@ public class EastMoneyClient {
                 .retrieve()
                 .bodyToMono(String.class)
                 .map(this::parseRealtimeData)
-                .doOnError(e -> log.error("Failed to get realtime quote for {}: {}", symbol, e.getMessage()))
+                .doOnError(e -> log.error("【东财】获取实时行情失败 标的={} 原因：{}", symbol, e.getMessage()))
                 .onErrorResume(e -> Mono.empty());
     }
 
@@ -113,8 +125,16 @@ public class EastMoneyClient {
                         .build())
                 .retrieve()
                 .bodyToMono(JsonNode.class)
-                .doOnError(e -> log.error("Failed to get kline data for {}: {}", symbol, e.getMessage()))
-                .onErrorResume(e -> Mono.empty());
+                .doOnError(e -> log.error("【东财】获取 K 线失败 标的={} 原因：{}", symbol, e.getMessage()))
+                .flatMap(data -> {
+                    JsonNode klineNode = data.path("data").path("klines");
+                    if (!klineNode.isArray() || klineNode.isEmpty()) {
+                        String message = "【东财】K 线数据为空 标的=" + symbol;
+                        log.error(message);
+                        return Mono.error(new IllegalStateException(message));
+                    }
+                    return Mono.just(data);
+                });
     }
 
     /**
@@ -135,7 +155,7 @@ public class EastMoneyClient {
                 .retrieve()
                 .bodyToMono(String.class)
                 .map(this::parseCapitalFlow)
-                .doOnError(e -> log.error("Failed to get capital flow for {}: {}", symbol, e.getMessage()))
+                .doOnError(e -> log.error("【东财】获取资金流向失败 标的={} 原因：{}", symbol, e.getMessage()))
                 .onErrorResume(e -> Mono.empty());
     }
 
@@ -159,7 +179,7 @@ public class EastMoneyClient {
                 .uri("http://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=20&po=1&np=1&fltt=2&invt=2&fid=f62&fs=m:90+t:" + plateType + "&fields=f12,f13,f14,f20,f21,f22,f23,f24,f25,f26,f27,f28,f29,f30,f31,f32,f33,f34,f35,f36,f37,f38,f39,f40,f41,f42,f43,f44,f45,f46,f47,f48,f49,f50,f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65,f66,f67,f68,f69,f70,f71,f72,f73,f74,f75,f76,f77,f78,f79,f80,f81,f82,f83,f84,f85,f86,f87,f88,f89,f90,f91")
                 .retrieve()
                 .bodyToMono(JsonNode.class)
-                .doOnError(e -> log.error("Failed to get sector flow: {}", e.getMessage()))
+                .doOnError(e -> log.error("【东财】获取板块资金流失败：{}", e.getMessage()))
                 .onErrorResume(e -> Mono.empty());
     }
 
@@ -191,7 +211,7 @@ public class EastMoneyClient {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to parse realtime data: {}", e.getMessage());
+            log.error("【东财】解析实时行情失败：{}", e.getMessage());
         }
         return result;
     }
@@ -219,7 +239,7 @@ public class EastMoneyClient {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to parse capital flow: {}", e.getMessage());
+            log.error("【东财】解析资金流向失败：{}", e.getMessage());
         }
         return result;
     }

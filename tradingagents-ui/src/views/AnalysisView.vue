@@ -44,6 +44,7 @@ import { onMounted } from 'vue'
 onMounted(() => { graphReady.value = true })
 
 const onNodeClick = (nodeId: string) => {
+  store.selectNode(nodeId)
   activeTab.value = 'detail'
 }
 </script>

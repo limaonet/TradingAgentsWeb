@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { getAnalysisReports, getAnalysisState } from '@/api/analysisApi'
 
 export type NodeStatus = 'idle' | 'pending' | 'running' | 'completed' | 'error'
 export type AnalysisStatus = 'idle' | 'running' | 'completed' | 'error'
@@ -58,12 +59,21 @@ const AGENT_NAME_MAP: Record<string, string> = {
   'conservative_risk': 'conservative_risk',
   'NeutralRisk': 'neutral_risk',
   'neutral_risk': 'neutral_risk',
+  // WebSocket 辩论消息里的 speaker 简称
+  'aggressive': 'aggressive_risk',
+  'conservative': 'conservative_risk',
+  'neutral': 'neutral_risk',
   'PortfolioManager': 'portfolio_manager',
   'portfolio_manager': 'portfolio_manager',
 }
 
 // 后端 reportType 到 nodeId 的映射
 const REPORT_TYPE_MAP: Record<string, string> = {
+  'market_report': 'market_analyst',
+  'sentiment_report': 'sentiment_analyst',
+  'fundamentals_report': 'fundamentals_analyst',
+  'investment_plan': 'research_manager',
+  'trader_plan': 'trader',
   'marketReport': 'market_analyst',
   'sentimentReport': 'sentiment_analyst',
   'fundamentalsReport': 'fundamentals_analyst',
@@ -78,6 +88,14 @@ const REPORT_TYPE_MAP: Record<string, string> = {
   'finalTradeDecision': 'portfolio_manager',
   'bullResearch': 'research_manager',
   'bearResearch': 'research_manager',
+}
+
+const REPORT_TO_STATE_KEY: Record<string, string> = {
+  market_report: 'marketReport',
+  sentiment_report: 'sentimentReport',
+  fundamentals_report: 'fundamentalsReport',
+  investment_plan: 'investmentPlan',
+  trader_plan: 'traderInvestmentPlan',
 }
 
 export const useAnalysisStore = defineStore('analysis', () => {
@@ -95,6 +113,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
   // 节点状态
   const nodes = ref<Record<string, AgentNode>>(createInitialNodes())
   const timelineMessages = ref<TimelineMessage[]>([])
+  const syncedState = ref<any>(null)
+  const reportsCache = ref<Record<string, string>>({})
 
   // 计时器
   let timerHandle: ReturnType<typeof setInterval> | null = null
@@ -112,7 +132,28 @@ export const useAnalysisStore = defineStore('analysis', () => {
   const nodeList = computed(() => Object.values(nodes.value))
   const completedCount = computed(() => nodeList.value.filter(n => n.status === 'completed').length)
   const totalNodes = computed(() => nodeList.value.length)
+  const isStarting = ref(false)
   const isRunning = computed(() => status.value === 'running')
+  /** 分析请求进行中（含接口往返），用于防止重复点击 */
+  const analysisBusy = computed(() => status.value === 'running' || isStarting.value)
+
+  const reportViewerOpen = ref(false)
+  const reportViewerTitle = ref('')
+  const reportViewerBody = ref('')
+
+  function setAnalysisStarting(v: boolean) {
+    isStarting.value = v
+  }
+
+  function openReportViewer(title: string, body: string) {
+    reportViewerTitle.value = title
+    reportViewerBody.value = body
+    reportViewerOpen.value = true
+  }
+
+  function closeReportViewer() {
+    reportViewerOpen.value = false
+  }
 
   // 获取 agent 元数据
   function getAgentMeta(id: string) {
@@ -135,6 +176,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
     selectedNodeId.value = null
     nodes.value = createInitialNodes()
     timelineMessages.value = []
+    syncedState.value = null
+    reportsCache.value = {}
     startTime.value = Date.now()
     elapsedSeconds.value = 0
 
@@ -190,6 +233,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
 
       case 'report': {
         const reportType = msg.reportType || ''
+        const normalizedReportType = REPORT_TO_STATE_KEY[reportType] || reportType
         const targetNodeId = REPORT_TYPE_MAP[reportType] || nodeId
         if (targetNodeId && nodes.value[targetNodeId]) {
           // 追加内容（研究经理可能收到多个report）
@@ -201,21 +245,28 @@ export const useAnalysisStore = defineStore('analysis', () => {
           nodes.value[targetNodeId].status = 'completed'
           nodes.value[targetNodeId].endTime = timestamp
         }
+        if (normalizedReportType) {
+          reportsCache.value[normalizedReportType] = msg.content || ''
+        }
         progress.value = Math.round((completedCount.value / totalNodes.value) * 100)
         break
       }
 
-      case 'debate':
+      case 'debate': {
+        const content = msg.content || ''
+        const isRiskPlaceholder = /正在分析|正在整合/.test(content)
         if (nodeId && nodes.value[nodeId]) {
           const prefix = msg.round ? `**[第${msg.round}轮]**\n\n` : ''
           if (nodes.value[nodeId].content) {
-            nodes.value[nodeId].content += '\n\n---\n\n' + prefix + (msg.content || '')
+            nodes.value[nodeId].content += '\n\n---\n\n' + prefix + content
           } else {
-            nodes.value[nodeId].content = prefix + (msg.content || '')
+            nodes.value[nodeId].content = prefix + content
           }
-          nodes.value[nodeId].status = 'running'
+          nodes.value[nodeId].status =
+            !isRiskPlaceholder && content.length > 15 ? 'completed' : 'running'
         }
         break
+      }
 
       case 'complete':
         status.value = 'completed'
@@ -226,6 +277,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
           nodes.value.portfolio_manager.content = msg.finalDecision
           nodes.value.portfolio_manager.status = 'completed'
           nodes.value.portfolio_manager.endTime = timestamp
+          reportsCache.value.finalTradeDecision = msg.finalDecision
         }
         // 停止计时
         if (timerHandle) { clearInterval(timerHandle); timerHandle = null }
@@ -239,6 +291,90 @@ export const useAnalysisStore = defineStore('analysis', () => {
         status.value = 'error'
         if (timerHandle) { clearInterval(timerHandle); timerHandle = null }
         break
+    }
+  }
+
+  function mergeReportsToNodes(reports: Record<string, string>) {
+    const setNodeReport = (nodeId: string, content: string) => {
+      const node = nodes.value[nodeId]
+      if (!node) return
+      node.content = content
+      node.status = 'completed'
+    }
+
+    if (reports.marketReport) {
+      setNodeReport('market_analyst', reports.marketReport)
+    }
+    if (reports.sentimentReport) {
+      setNodeReport('sentiment_analyst', reports.sentimentReport)
+    }
+    if (reports.fundamentalsReport) {
+      setNodeReport('fundamentals_analyst', reports.fundamentalsReport)
+    }
+    if (reports.investmentPlan) {
+      setNodeReport('research_manager', reports.investmentPlan)
+    }
+    if (reports.traderInvestmentPlan) {
+      setNodeReport('trader', reports.traderInvestmentPlan)
+    }
+    if (reports.aggressiveAnalysis) {
+      setNodeReport('aggressive_risk', reports.aggressiveAnalysis)
+    }
+    if (reports.conservativeAnalysis) {
+      setNodeReport('conservative_risk', reports.conservativeAnalysis)
+    }
+    if (reports.neutralAnalysis) {
+      setNodeReport('neutral_risk', reports.neutralAnalysis)
+    }
+    if (reports.finalTradeDecision) {
+      setNodeReport('portfolio_manager', reports.finalTradeDecision)
+    }
+  }
+
+  function syncNodeStatusesFromAgentStatuses(agentStatuses: Record<string, string>) {
+    for (const [agentName, agentStatus] of Object.entries(agentStatuses || {})) {
+      const mapped = resolveNodeId(agentName)
+      if (mapped && nodes.value[mapped]) {
+        const normalized = (agentStatus || '').toLowerCase()
+        if (normalized === 'running' || normalized === 'completed' || normalized === 'error' || normalized === 'pending') {
+          nodes.value[mapped].status = normalized as NodeStatus
+        }
+      }
+    }
+  }
+
+  async function hydrateFromServer(id: string) {
+    if (!id) return
+    try {
+      const [stateResp, reportsResp] = await Promise.all([
+        getAnalysisState(id),
+        getAnalysisReports(id),
+      ])
+      syncedState.value = stateResp
+      reportsCache.value = reportsResp || {}
+      const mergedReports = {
+        marketReport: stateResp?.marketReport || reportsResp?.marketReport || '',
+        sentimentReport: stateResp?.sentimentReport || reportsResp?.sentimentReport || '',
+        fundamentalsReport: stateResp?.fundamentalsReport || reportsResp?.fundamentalsReport || '',
+        investmentPlan: reportsResp?.investmentPlan || '',
+        traderInvestmentPlan: reportsResp?.traderInvestmentPlan || '',
+        aggressiveAnalysis: stateResp?.aggressiveAnalysis || reportsResp?.aggressiveAnalysis || '',
+        conservativeAnalysis: stateResp?.conservativeAnalysis || reportsResp?.conservativeAnalysis || '',
+        neutralAnalysis: stateResp?.neutralAnalysis || reportsResp?.neutralAnalysis || '',
+        finalTradeDecision: stateResp?.finalTradeDecision || reportsResp?.finalTradeDecision || '',
+      }
+
+      if (stateResp?.ticker) ticker.value = stateResp.ticker
+      if (stateResp?.date) date.value = stateResp.date
+      if (stateResp?.status === 'completed' || stateResp?.status === 'error' || stateResp?.status === 'running') {
+        status.value = stateResp.status
+      }
+      if (stateResp?.status === 'completed') progress.value = 100
+
+      syncNodeStatusesFromAgentStatuses(stateResp?.agentStatuses || {})
+      mergeReportsToNodes(mergedReports)
+    } catch (err) {
+      console.warn('hydrateFromServer failed:', err)
     }
   }
 
@@ -265,11 +401,13 @@ export const useAnalysisStore = defineStore('analysis', () => {
     // state
     analysisId, status, progress, currentAgent, selectedNodeId,
     ticker, date, startTime, elapsedSeconds,
-    nodes, timelineMessages,
+    nodes, timelineMessages, syncedState, reportsCache,
     // computed
-    selectedNode, nodeList, completedCount, totalNodes, isRunning,
+    selectedNode, nodeList, completedCount, totalNodes, isRunning, isStarting, analysisBusy,
+    reportViewerOpen, reportViewerTitle, reportViewerBody,
     // methods
-    getAgentMeta, resolveNodeId, startAnalysis, handleMessage, selectNode, reset,
+    getAgentMeta, resolveNodeId, startAnalysis, handleMessage, selectNode, reset, hydrateFromServer,
+    setAnalysisStarting, openReportViewer, closeReportViewer,
     // constants
     AGENT_META,
   }

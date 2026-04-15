@@ -25,7 +25,7 @@ public class ResearchManagerAgent {
     public String generateInvestmentPlan(String analysisId, String symbol, String date,
                                          String marketReport, String sentimentReport, 
                                          String newsReport, String fundamentalsReport) {
-        log.info("Research Manager generating investment plan for {}", symbol);
+        log.info("【研究经理】正在生成投资计划 标的={}", symbol);
         progressHandler.sendAgentStatus(analysisId, "research_manager", "running", "正在整合分析师报告...");
         
         try {
@@ -39,11 +39,11 @@ public class ResearchManagerAgent {
             progressHandler.sendAgentStatus(analysisId, "research_manager", "completed", "投资计划生成完成");
             progressHandler.sendReport(analysisId, "investment_plan", plan);
             
-            log.info("Research Manager completed investment plan for {}", symbol);
+            log.info("【研究经理】投资计划已生成 标的={}", symbol);
             return plan;
             
         } catch (Exception e) {
-            log.error("Research Manager failed for {}: {}", symbol, e.getMessage());
+            log.error("【研究经理】失败 标的={} 原因：{}", symbol, e.getMessage());
             progressHandler.sendError(analysisId, "research_manager", e.getMessage());
             throw new RuntimeException("投资计划生成失败", e);
         }

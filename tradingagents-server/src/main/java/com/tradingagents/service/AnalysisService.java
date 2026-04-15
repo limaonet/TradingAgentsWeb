@@ -1,8 +1,10 @@
 package com.tradingagents.service;
 
 import com.tradingagents.agents.*;
+import com.tradingagents.data.client.StockSymbolResolverClient;
 import com.tradingagents.model.AnalysisRequest;
 import com.tradingagents.model.AnalysisState;
+import com.tradingagents.model.SymbolSearchItem;
 import com.tradingagents.websocket.AnalysisProgressHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +34,7 @@ public class AnalysisService {
     private final RiskManagementAgents riskManagementAgents;
     private final PortfolioManagerAgent portfolioManagerAgent;
     private final AnalysisProgressHandler progressHandler;
+    private final StockSymbolResolverClient stockSymbolResolverClient;
 
     // 分析状态缓存
     private final Map<String, AnalysisState> analysisCache = new ConcurrentHashMap<>();
@@ -41,11 +44,13 @@ public class AnalysisService {
      */
     public String startAnalysis(AnalysisRequest request) {
         String analysisId = UUID.randomUUID().toString();
+        String resolvedSymbol = stockSymbolResolverClient.resolveToSymbol(request.getTicker()).block();
+        request.setTicker(resolvedSymbol);
         
         // 初始化分析状态
         AnalysisState state = AnalysisState.builder()
                 .analysisId(analysisId)
-                .ticker(request.getTicker())
+                .ticker(resolvedSymbol)
                 .date(request.getDate())
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
@@ -55,6 +60,7 @@ public class AnalysisService {
                 .build();
         
         analysisCache.put(analysisId, state);
+        log.info("【分析】已创建任务 analysisId={}，解析后标的={}", analysisId, resolvedSymbol);
         
         // 异步执行分析流程
         executeAnalysisFlow(analysisId, request)
@@ -64,13 +70,13 @@ public class AnalysisService {
                             state.setStatus("completed");
                             state.setEndTime(LocalDateTime.now());
                             state.setProgress(100);
-                            log.info("Analysis {} completed successfully", analysisId);
+                            log.info("【分析】任务完成 analysisId={}", analysisId);
                         },
                         error -> {
                             state.setStatus("error");
                             state.setEndTime(LocalDateTime.now());
                             state.setErrorMessage(error.getMessage());
-                            log.error("Analysis {} failed: {}", analysisId, error.getMessage());
+                            log.error("【分析】任务失败 analysisId={}，原因：{}", analysisId, error.getMessage());
                             progressHandler.sendError(analysisId, "system", error.getMessage());
                         }
                 );
@@ -86,10 +92,11 @@ public class AnalysisService {
         String date = request.getDate();
         
         return Mono.fromRunnable(() -> {
+                    log.info("【分析】进入编排：并行执行市场/舆情/基本面分析 analysisId={} 标的={}", analysisId, symbol);
                     progressHandler.sendProgress(analysisId, "system", "started", "开始分析流程");
                 })
                 // Phase 1: 并行执行分析师分析
-                .then(Mono.zip(
+                .then(Mono.zipDelayError(
                         executeMarketAnalysis(analysisId, symbol, date),
                         executeSentimentAnalysis(analysisId, symbol, date),
                         executeFundamentalsAnalysis(analysisId, symbol, date)
@@ -110,6 +117,11 @@ public class AnalysisService {
                                             return executeRiskDebate(analysisId, symbol, date,
                                                     marketReport, sentimentReport, fundamentalsReport, tradePlan)
                                                     .flatMap(riskViews -> {
+                                                        updateState(analysisId, state -> {
+                                                            state.setAggressiveAnalysis(riskViews.aggressive());
+                                                            state.setConservativeAnalysis(riskViews.conservative());
+                                                            state.setNeutralAnalysis(riskViews.neutral());
+                                                        });
                                                         // Phase 5: 组合经理生成最终决策
                                                         return executePortfolioManager(analysisId, symbol, date,
                                                                 marketReport, sentimentReport, fundamentalsReport,
@@ -226,6 +238,10 @@ public class AnalysisService {
      */
     public AnalysisState getAnalysisState(String analysisId) {
         return analysisCache.get(analysisId);
+    }
+
+    public java.util.List<SymbolSearchItem> searchSymbols(String keyword, int limit) {
+        return stockSymbolResolverClient.searchCandidates(keyword, limit).block();
     }
 
     /**

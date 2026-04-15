@@ -315,10 +315,85 @@
   background: rgba(34, 197, 94, 0.2);
 }
 
-/* 响应式 */
-@media (max-width: 1200px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
-  }
+/* 报告详情弹窗（Teleport 到 body，需全局样式） */
+.report-viewer-modal .ant-modal-content {
+  background: linear-gradient(180deg, rgba(12, 20, 37, 0.98), rgba(10, 16, 30, 0.98));
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  box-shadow: 0 0 36px rgba(6, 182, 212, 0.18);
+  border-radius: 14px;
 }
+
+.report-viewer-modal .ant-modal-header {
+  background: transparent;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.22);
+  padding-bottom: 12px;
+}
+
+.report-viewer-modal .ant-modal-title {
+  color: var(--text-primary);
+}
+
+.report-viewer-modal .report-viewer-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.report-viewer-modal .report-toolbar {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.report-viewer-modal .report-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.report-viewer-modal .report-viewer-body {
+  max-height: min(72vh, 720px);
+  overflow: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  scrollbar-color: rgba(59, 130, 246, 0.45) var(--bg-input);
+}
+
+.report-viewer-modal .report-viewer-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.report-viewer-modal .report-viewer-body::-webkit-scrollbar-track {
+  background: var(--bg-input);
+  border-radius: 4px;
+}
+
+.report-viewer-modal .report-viewer-body::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.45);
+  border-radius: 4px;
+}
+
+.report-viewer-modal .md-editor-preview {
+  background: transparent;
+  color: var(--text-primary);
+  padding: 8px 2px 4px;
+}
+
+.report-viewer-modal .md-editor-preview-wrapper {
+  background: transparent;
+}
+
+.report-viewer-modal .md-editor-preview ul,
+.report-viewer-modal .md-editor-preview ol {
+  padding-left: 1.4rem;
+}
+
+.report-viewer-modal .md-editor-preview blockquote {
+  border-left-color: rgba(59, 130, 246, 0.6);
+  background: rgba(59, 130, 246, 0.08);
+}
+

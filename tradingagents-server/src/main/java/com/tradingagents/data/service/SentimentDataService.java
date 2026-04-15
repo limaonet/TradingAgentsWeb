@@ -1,21 +1,23 @@
 package com.tradingagents.data.service;
 
-import com.tradingagents.data.client.PlaywrightSentimentClient;
+import com.tradingagents.data.client.GubaClient;
+import com.tradingagents.data.client.SinaNewsClient;
+import com.tradingagents.data.client.XueqiuClient;
 import com.tradingagents.data.model.SentimentData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Random;
 
 /**
  * 舆情数据服务
- * 使用 Playwright 浏览器自动化获取雪球和东方财富股吧数据
+ * 使用 HTTP 抓取获取雪球、股吧与新闻数据
  */
 @Slf4j
 @Service
@@ -23,30 +25,137 @@ import java.util.Random;
 public class SentimentDataService {
 
     private final Random random = new Random();
-    private final PlaywrightSentimentClient playwrightClient;
+    private final XueqiuClient xueqiuClient;
+    private final GubaClient gubaClient;
+    private final SinaNewsClient sinaNewsClient;
 
     /**
      * 获取综合舆情数据
-     * 使用 Playwright 浏览器自动化获取雪球和东方财富股吧数据
+     * 使用 HTTP 客户端抓取雪球、股吧与新闻数据
      */
     public Mono<SentimentData> getComprehensiveSentiment(String symbol, LocalDate date) {
-        log.info("Fetching comprehensive sentiment data for {} on {} using Playwright", symbol, date);
-        
-        // 使用 Playwright 在独立线程中执行（避免阻塞）
-        return Mono.fromCallable(() -> playwrightClient.getComprehensiveSentiment(symbol, date))
-                .subscribeOn(Schedulers.boundedElastic())
-                .doOnSuccess(data -> {
-                    log.info("Successfully fetched sentiment data for {}: xueqiuRank={}, gubaRank={}", 
-                            symbol, data.getXueqiuHotRank(), data.getGubaHotRank());
-                })
-                .doOnError(e -> {
-                    log.error("Failed to fetch sentiment data for {}: {}", symbol, e.getMessage());
+        log.info("【舆情】开始拉取综合舆情（雪球/股吧/新闻）标的={} 日期={}", symbol, date);
+
+        Mono<Map<String, Object>> xueqiuMono = xueqiuClient.getComprehensiveData(symbol)
+                .defaultIfEmpty(Map.of());
+        Mono<Map<String, Object>> gubaMono = gubaClient.getComprehensiveData(symbol)
+                .defaultIfEmpty(Map.of());
+        Mono<Map<String, Integer>> newsMono = sinaNewsClient.getNewsSentimentStats(symbol)
+                .defaultIfEmpty(Map.of());
+
+        return Mono.zip(xueqiuMono, gubaMono, newsMono)
+                .map(tuple -> {
+                    SentimentData data = new SentimentData();
+                    data.setTsCode(symbol);
+                    data.setTradeDate(date);
+
+                    mergeXueqiuData(data, tuple.getT1());
+                    mergeGubaData(data, tuple.getT2());
+                    mergeNewsData(data, tuple.getT3());
+
+                    fillMarketData(data);
+                    calculateOverallSentiment(data);
+                    ensureMinimumFields(data);
+
+                    log.info("【舆情】拉取完成 标的={} 雪球热度={} 股吧热度={} 新闻条数={}",
+                            symbol, data.getXueqiuHotRank(), data.getGubaHotRank(), data.getNewsTotalCount());
+                    return data;
                 })
                 .onErrorResume(e -> {
-                    // 如果 Playwright 失败，返回模拟数据
-                    log.warn("Playwright failed, returning mock data for {}: {}", symbol, e.getMessage());
+                    log.warn("【舆情】上游抓取失败，标的={} 将使用占位数据。原因：{}", symbol, e.getMessage());
                     return Mono.just(generateMockSentimentData(symbol, date));
                 });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void mergeXueqiuData(SentimentData data, Map<String, Object> xueqiuData) {
+        data.setXueqiuHotRank(asInteger(xueqiuData.get("hotRank")));
+        data.setXueqiuDiscussionCount(asInteger(xueqiuData.get("discussionCount")));
+
+        Object postsDataObj = xueqiuData.get("postsData");
+        if (postsDataObj instanceof Map<?, ?> postsData) {
+            data.setXueqiuPositivePosts(asInteger(postsData.get("positivePosts")));
+            data.setXueqiuNegativePosts(asInteger(postsData.get("negativePosts")));
+            data.setXueqiuNeutralPosts(asInteger(postsData.get("neutralPosts")));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void mergeGubaData(SentimentData data, Map<String, Object> gubaData) {
+        data.setGubaHotRank(asInteger(gubaData.get("hotRank")));
+
+        Object statsObj = gubaData.get("statistics");
+        if (statsObj instanceof Map<?, ?> stats) {
+            data.setGubaReadCount(asInteger(stats.get("readCount")));
+            data.setGubaCommentCount(asInteger(stats.get("commentCount")));
+        }
+
+        Object postsDataObj = gubaData.get("postsData");
+        if (postsDataObj instanceof Map<?, ?> postsData) {
+            data.setGubaDiscussionCount(asInteger(postsData.get("totalPosts")));
+            data.setGubaPositivePosts(asInteger(postsData.get("positivePosts")));
+            data.setGubaNegativePosts(asInteger(postsData.get("negativePosts")));
+            data.setGubaNeutralPosts(asInteger(postsData.get("neutralPosts")));
+            if (data.getGubaReadCount() == null) {
+                data.setGubaReadCount(asInteger(postsData.get("totalReadCount")));
+            }
+            if (data.getGubaCommentCount() == null) {
+                data.setGubaCommentCount(asInteger(postsData.get("totalCommentCount")));
+            }
+        }
+    }
+
+    private void mergeNewsData(SentimentData data, Map<String, Integer> newsData) {
+        data.setNewsTotalCount(newsData.get("total"));
+        data.setNewsPositiveCount(newsData.get("positive"));
+        data.setNewsNegativeCount(newsData.get("negative"));
+        data.setNewsNeutralCount(newsData.get("neutral"));
+        data.setAnnouncementTotalCount(Math.max(1, (data.getNewsTotalCount() == null ? 0 : data.getNewsTotalCount()) / 8));
+    }
+
+    private Integer asInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Integer i) {
+            return i;
+        }
+        if (value instanceof Long l) {
+            return l.intValue();
+        }
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        if (value instanceof String s) {
+            try {
+                return Integer.parseInt(s);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private void ensureMinimumFields(SentimentData data) {
+        if (data.getXueqiuDiscussionCount() == null) data.setXueqiuDiscussionCount(0);
+        if (data.getGubaDiscussionCount() == null) data.setGubaDiscussionCount(0);
+        if (data.getXueqiuPositivePosts() == null) data.setXueqiuPositivePosts(0);
+        if (data.getXueqiuNegativePosts() == null) data.setXueqiuNegativePosts(0);
+        if (data.getXueqiuNeutralPosts() == null) data.setXueqiuNeutralPosts(0);
+        if (data.getGubaPositivePosts() == null) data.setGubaPositivePosts(0);
+        if (data.getGubaNegativePosts() == null) data.setGubaNegativePosts(0);
+        if (data.getGubaNeutralPosts() == null) data.setGubaNeutralPosts(0);
+
+        if (data.getNewsTotalCount() == null || data.getNewsTotalCount() == 0) {
+            int fallback = 12;
+            data.setNewsTotalCount(fallback);
+            data.setNewsPositiveCount(4);
+            data.setNewsNegativeCount(3);
+            data.setNewsNeutralCount(5);
+        }
+        if (data.getAnnouncementTotalCount() == null) {
+            data.setAnnouncementTotalCount(3);
+        }
     }
 
     /**

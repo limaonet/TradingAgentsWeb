@@ -131,6 +131,8 @@ const props = defineProps<{
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-mono);
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .action-item.primary .action-value {

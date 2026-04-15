@@ -95,6 +95,9 @@ const toggleExpand = (id: string) => {
 }
 
 const handleClick = (msg: TimelineMessage) => {
+  if (msg.content?.trim()) {
+    store.openReportViewer(`${msg.agentName} · ${getTypeLabel(msg.type)}`, msg.content)
+  }
   const nodeId = store.resolveNodeId(msg.agent)
   if (nodeId) {
     store.selectNode(nodeId)

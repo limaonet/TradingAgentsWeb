@@ -94,6 +94,7 @@ const selectAnalyst = (id: string) => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .panel-header {
@@ -129,6 +130,7 @@ const selectAnalyst = (id: string) => {
 
 .analysts-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

@@ -29,7 +29,7 @@ public class SentimentAnalystAgent {
      * 执行情绪分析
      */
     public String analyze(String analysisId, String symbol, String date) {
-        log.info("Sentiment Analyst starting analysis for {} on {}", symbol, date);
+        log.info("【情绪分析师】开始分析 标的={} 日期={}", symbol, date);
         progressHandler.sendAgentStatus(analysisId, "sentiment_analyst", "running", "正在获取舆情数据...");
         
         try {
@@ -51,11 +51,11 @@ public class SentimentAnalystAgent {
             progressHandler.sendAgentStatus(analysisId, "sentiment_analyst", "completed", "情绪分析完成");
             progressHandler.sendReport(analysisId, "sentiment_report", report);
             
-            log.info("Sentiment Analyst completed analysis for {}", symbol);
+            log.info("【情绪分析师】分析完成 标的={}", symbol);
             return report;
             
         } catch (Exception e) {
-            log.error("Sentiment Analyst failed for {}: {}", symbol, e.getMessage());
+            log.error("【情绪分析师】失败 标的={} 原因：{}", symbol, e.getMessage());
             progressHandler.sendError(analysisId, "sentiment_analyst", e.getMessage());
             throw new RuntimeException("情绪分析失败", e);
         }

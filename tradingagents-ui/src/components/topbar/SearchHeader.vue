@@ -18,7 +18,9 @@
           type="text"
           class="search-input"
           placeholder="输入股票代码或名称..."
+          :disabled="store.analysisBusy"
           @keyup.enter="handleSearch"
+          @input="handleInput"
           @focus="showHistory = true"
           @blur="handleBlur"
         />
@@ -29,14 +31,14 @@
 
       <!-- 历史记录下拉 -->
       <Transition name="dropdown">
-        <div v-if="showHistory && searchHistory.length > 0" class="history-dropdown">
+        <div v-if="showHistory && dropdownItems.length > 0" class="history-dropdown">
           <div class="history-header">
-            <span>最近分析</span>
-            <button class="clear-history" @click="clearHistory">清空</button>
+            <span>{{ ticker.trim() ? '搜索结果' : '最近分析' }}</span>
+            <button v-if="!ticker.trim()" class="clear-history" @click="clearHistory">清空</button>
           </div>
           <div
-            v-for="item in searchHistory"
-            :key="item.ticker"
+            v-for="item in dropdownItems"
+            :key="`${item.ticker}-${item.name}`"
             class="history-item"
             @click="selectHistory(item)"
           >
@@ -49,32 +51,29 @@
 
       <button
         class="analyze-btn"
-        :disabled="!ticker.trim() || isLoading"
+        type="button"
+        :disabled="!ticker.trim() || store.analysisBusy"
         @click="handleSearch"
       >
-        <LoadingOutlined v-if="isLoading" spin />
+        <LoadingOutlined v-if="store.analysisBusy" spin />
         <ThunderboltOutlined v-else />
-        <span>{{ isLoading ? '分析中...' : '开始分析' }}</span>
+        <span>{{ store.analysisBusy ? '分析中...' : '开始分析' }}</span>
       </button>
     </div>
 
-    <div class="actions-section">
-      <button class="theme-toggle" @click="toggleTheme">
-        <span v-if="isDark">🌙</span>
-        <span v-else>☀️</span>
-      </button>
-    </div>
   </header>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import {
   SearchOutlined,
   CloseOutlined,
   ThunderboltOutlined,
   LoadingOutlined,
 } from '@ant-design/icons-vue'
+import { searchSymbols } from '@/api/analysisApi'
+import { useAnalysisStore } from '@/stores/analysisStore'
 
 interface HistoryItem {
   ticker: string
@@ -83,14 +82,18 @@ interface HistoryItem {
 }
 
 const emit = defineEmits<{
-  search: [ticker: string]
+  search: [payload: { ticker: string; displayName?: string }]
 }>()
 
+const store = useAnalysisStore()
+
 const ticker = ref('')
-const isLoading = ref(false)
-const isDark = ref(true)
 const showHistory = ref(false)
 const searchHistory = ref<HistoryItem[]>([])
+const suggestions = ref<HistoryItem[]>([])
+let queryTimer: ReturnType<typeof setTimeout> | null = null
+
+const dropdownItems = computed(() => ticker.value.trim() ? suggestions.value : searchHistory.value)
 
 // 加载历史记录
 onMounted(() => {
@@ -101,20 +104,19 @@ onMounted(() => {
 })
 
 const handleSearch = () => {
-  if (!ticker.value.trim()) return
-  
-  isLoading.value = true
-  emit('search', ticker.value.trim())
-  
-  // 添加到历史记录
-  addToHistory(ticker.value.trim())
-  
-  setTimeout(() => {
-    isLoading.value = false
-  }, 500)
+  if (!ticker.value.trim() || store.analysisBusy) return
+
+  store.setAnalysisStarting(true)
+  const selected = suggestions.value.find((s) => s.ticker === ticker.value.trim())
+  emit('search', {
+    ticker: ticker.value.trim(),
+    displayName: selected ? `${selected.name} (${selected.ticker})` : ticker.value.trim(),
+  })
+
+  addToHistory(ticker.value.trim(), selected?.name || ticker.value.trim())
 }
 
-const addToHistory = (code: string) => {
+const addToHistory = (code: string, name: string) => {
   const existingIndex = searchHistory.value.findIndex(h => h.ticker === code)
   if (existingIndex > -1) {
     searchHistory.value.splice(existingIndex, 1)
@@ -122,7 +124,7 @@ const addToHistory = (code: string) => {
   
   searchHistory.value.unshift({
     ticker: code,
-    name: getStockName(code),
+    name,
     date: Date.now(),
   })
   
@@ -134,20 +136,9 @@ const addToHistory = (code: string) => {
   localStorage.setItem('tradingagents_history', JSON.stringify(searchHistory.value))
 }
 
-const getStockName = (code: string): string => {
-  // 简单的映射，实际应该从API获取
-  const map: Record<string, string> = {
-    '600519': '贵州茅台',
-    '000001': '平安银行',
-    '000858': '五粮液',
-    '002594': '比亚迪',
-    '300750': '宁德时代',
-  }
-  return map[code] || code
-}
-
 const selectHistory = (item: HistoryItem) => {
   ticker.value = item.ticker
+  suggestions.value = []
   showHistory.value = false
   handleSearch()
 }
@@ -163,6 +154,28 @@ const handleBlur = () => {
   }, 200)
 }
 
+const handleInput = () => {
+  if (store.analysisBusy) return
+  const keyword = ticker.value.trim()
+  if (!keyword) {
+    suggestions.value = []
+    return
+  }
+  if (queryTimer) clearTimeout(queryTimer)
+  queryTimer = setTimeout(async () => {
+    try {
+      const items = await searchSymbols(keyword, 10)
+      suggestions.value = items.map((item) => ({
+        ticker: item.code,
+        name: item.name,
+        date: Date.now(),
+      }))
+    } catch {
+      suggestions.value = []
+    }
+  }, 250)
+}
+
 const formatDate = (timestamp: number): string => {
   const date = new Date(timestamp)
   const now = new Date()
@@ -174,18 +187,22 @@ const formatDate = (timestamp: number): string => {
   return `${date.getMonth() + 1}/${date.getDate()}`
 }
 
-const toggleTheme = () => {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('light-theme', !isDark.value)
-}
+onBeforeUnmount(() => {
+  if (queryTimer) clearTimeout(queryTimer)
+})
+
 </script>
 
 <style scoped>
 .search-header {
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  gap: 12px;
+  flex-wrap: nowrap;
+  padding: 12px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   position: relative;
@@ -228,12 +245,17 @@ const toggleTheme = () => {
   align-items: center;
   gap: 12px;
   position: relative;
+  flex: 1;
+  min-width: 320px;
+  max-width: none;
 }
 
 .search-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
+  flex: 1;
+  min-width: 220px;
 }
 
 .search-icon {
@@ -244,7 +266,7 @@ const toggleTheme = () => {
 }
 
 .search-input {
-  width: 320px;
+  width: 100%;
   height: 44px;
   padding: 0 40px;
   background: var(--bg-input);
@@ -281,7 +303,8 @@ const toggleTheme = () => {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  width: 320px;
+  width: 100%;
+  min-width: 240px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -346,14 +369,17 @@ const toggleTheme = () => {
   align-items: center;
   gap: 8px;
   height: 44px;
+  min-width: 112px;
   padding: 0 24px;
   background: linear-gradient(135deg, #3b82f6, #06b6d4);
   border: none;
   border-radius: var(--radius-md);
   color: white;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
   transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .analyze-btn:hover:not(:disabled) {
@@ -367,29 +393,44 @@ const toggleTheme = () => {
   cursor: not-allowed;
 }
 
-.actions-section {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+@media (max-width: 920px) {
+  .search-header {
+    padding: 12px;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .logo-section {
+    order: 1;
+  }
+
+  .search-section {
+    order: 2;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .search-input-wrapper {
+    min-width: 0;
+  }
+
+  .analyze-btn {
+    padding: 0 16px;
+    flex-shrink: 0;
+  }
 }
 
-.theme-toggle {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.3s;
-}
+@media (max-width: 640px) {
+  .search-section {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
 
-.theme-toggle:hover {
-  border-color: var(--color-info);
-  color: var(--text-primary);
+  .analyze-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* 下拉动画 */

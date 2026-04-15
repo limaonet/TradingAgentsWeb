@@ -27,7 +27,7 @@ public class AnalysisProgressHandler {
     public void sendProgress(String analysisId, String agent, String status, String message) {
         Map<String, Object> payload = createPayload("progress", agent, status, message, null);
         messagingTemplate.convertAndSend("/topic/analysis/" + analysisId, payload);
-        log.debug("Sent progress update for analysis {}: agent={}, status={}", analysisId, agent, status);
+        log.debug("【WS】已推送进度 analysisId={} agent={} status={}", analysisId, agent, status);
     }
 
     /**
@@ -38,7 +38,7 @@ public class AnalysisProgressHandler {
         payload.put("reportType", reportType);
         payload.put("content", content);
         messagingTemplate.convertAndSend("/topic/analysis/" + analysisId, payload);
-        log.debug("Sent report update for analysis {}: type={}", analysisId, reportType);
+        log.debug("【WS】已推送报告 analysisId={} reportType={}", analysisId, reportType);
     }
 
     /**
@@ -48,7 +48,7 @@ public class AnalysisProgressHandler {
         Map<String, Object> payload = createPayload("complete", null, "completed", "分析完成", null);
         payload.put("finalDecision", finalDecision);
         messagingTemplate.convertAndSend("/topic/analysis/" + analysisId, payload);
-        log.info("Analysis completed: {}", analysisId);
+        log.info("【WS】分析流程已全部结束 analysisId={}", analysisId);
     }
 
     /**
@@ -57,7 +57,7 @@ public class AnalysisProgressHandler {
     public void sendError(String analysisId, String agent, String errorMessage) {
         Map<String, Object> payload = createPayload("error", agent, "error", errorMessage, null);
         messagingTemplate.convertAndSend("/topic/analysis/" + analysisId, payload);
-        log.error("Analysis error for {}: {}", analysisId, errorMessage);
+        log.error("【WS】分析异常 analysisId={} 信息：{}", analysisId, errorMessage);
     }
 
     /**

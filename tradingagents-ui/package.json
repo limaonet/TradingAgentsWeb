@@ -20,6 +20,7 @@
     "@vueuse/core": "^14.2.1",
     "ant-design-vue": "^4.2.6",
     "axios": "^1.15.0",
+    "md-editor-v3": "^6.4.2",
     "pinia": "^3.0.4",
     "sockjs-client": "^1.6.1",
     "stompjs": "^2.3.3",

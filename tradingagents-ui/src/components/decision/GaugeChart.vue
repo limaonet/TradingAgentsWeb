@@ -1,134 +1,92 @@
 <template>
-  <div class="gauge-chart">
-    <svg viewBox="0 0 200 110" class="gauge-svg">
-      <defs>
-        <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#ef4444" />
-          <stop offset="50%" stop-color="#eab308" />
-          <stop offset="100%" stop-color="#22c55e" />
-        </linearGradient>
-        <filter id="glow">
-          <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-          <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-      </defs>
-      
-      <!-- 背景弧 -->
-      <path
-        d="M 20 100 A 80 80 0 0 1 180 100"
-        fill="none"
-        stroke="var(--bg-input)"
-        stroke-width="20"
-        stroke-linecap="round"
+  <div ref="rootRef" class="gauge-chart">
+    <div class="gauge-progress-wrap">
+      <a-progress
+        type="dashboard"
+        :percent="safeValue"
+        :width="gaugePx"
+        :gap-degree="80"
+        :stroke-width="12"
+        :trail-color="'rgba(60, 84, 121, 0.45)'"
+        :stroke-color="{
+          '0%': '#ef4444',
+          '50%': '#eab308',
+          '100%': '#22c55e',
+        }"
+        :format="() => ''"
       />
-      
-      <!-- 进度弧 -->
-      <path
-        d="M 20 100 A 80 80 0 0 1 180 100"
-        fill="none"
-        stroke="url(#gaugeGradient)"
-        stroke-width="20"
-        stroke-linecap="round"
-        :stroke-dasharray="circumference"
-        :stroke-dashoffset="dashOffset"
-        class="gauge-progress"
-        filter="url(#glow)"
-      />
-      
-      <!-- 刻度 -->
-      <g class="ticks">
-        <text x="20" y="115" class="tick-label">0</text>
-        <text x="100" y="30" class="tick-label">50</text>
-        <text x="180" y="115" class="tick-label">100</text>
-      </g>
-      
-      <!-- 指针 -->
-      <g class="needle" :style="{ transform: `rotate(${needleAngle}deg)` }">
-        <circle cx="100" cy="100" r="6" fill="var(--text-primary)" />
-        <path
-          d="M 100 100 L 100 30"
-          stroke="var(--text-primary)"
-          stroke-width="3"
-          stroke-linecap="round"
-        />
-      </g>
-    </svg>
-    
-    <div class="gauge-value">
-      <span class="value-number">{{ value }}</span>
-      <span class="value-unit">%</span>
+
+      <div class="gauge-value">
+        <span class="value-number">{{ safeValue }}</span>
+        <span class="value-unit">%</span>
+      </div>
+
+      <div class="gauge-ticks">
+        <span class="tick tick-left">0</span>
+        <span class="tick tick-mid">50</span>
+        <span class="tick tick-right">100</span>
+      </div>
     </div>
-    
+
     <div class="gauge-label">{{ label }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useResizeObserver } from '@vueuse/core'
 
 const props = defineProps<{
   value: number
   label: string
 }>()
-
-const radius = 80
-const circumference = Math.PI * radius
-
-const dashOffset = computed(() => {
-  const progress = Math.max(0, Math.min(100, props.value))
-  return circumference - (progress / 100) * circumference
-})
-
-const needleAngle = computed(() => {
-  const progress = Math.max(0, Math.min(100, props.value))
-  return -90 + (progress / 100) * 180
+const safeValue = computed(() => Math.max(0, Math.min(100, Math.round(props.value))))
+const rootRef = ref<HTMLElement | null>(null)
+const gaugePx = ref(220)
+useResizeObserver(rootRef, (entries) => {
+  const w = entries[0]?.contentRect.width ?? 240
+  gaugePx.value = Math.max(160, Math.min(220, Math.floor(w - 20)))
 })
 </script>
 
 <style scoped>
 .gauge-chart {
-  position: relative;
-  width: 220px;
-  margin: 0 auto;
-}
-
-.gauge-svg {
   width: 100%;
-  height: auto;
+  max-width: 240px;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
-.gauge-progress {
-  transition: stroke-dashoffset 1s ease-out;
+.gauge-progress-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
 }
 
-.ticks {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  fill: var(--text-muted);
-}
-
-.tick-label {
-  text-anchor: middle;
-}
-
-.needle {
-  transform-origin: 100px 100px;
-  transition: transform 1s ease-out;
+.gauge-progress-wrap::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  width: 180px;
+  height: 86px;
+  border-radius: 90px 90px 0 0;
+  box-shadow: 0 -10px 24px rgba(56, 189, 248, 0.1);
+  pointer-events: none;
 }
 
 .gauge-value {
   position: absolute;
-  bottom: 20px;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
   text-align: center;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .value-number {
-  font-size: 36px;
+  font-size: 42px;
   font-weight: 700;
   font-family: var(--font-mono);
   background: linear-gradient(135deg, var(--color-info), var(--color-accent));
@@ -138,15 +96,48 @@ const needleAngle = computed(() => {
 }
 
 .value-unit {
-  font-size: 18px;
+  font-size: 20px;
   color: var(--text-secondary);
-  margin-left: 2px;
+  margin-left: 3px;
+}
+
+.gauge-ticks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tick {
+  position: absolute;
+}
+
+.tick-left {
+  left: 24px;
+  bottom: 26px;
+}
+
+.tick-mid {
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tick-right {
+  right: 22px;
+  bottom: 26px;
 }
 
 .gauge-label {
   text-align: center;
   font-size: 14px;
   color: var(--text-secondary);
-  margin-top: 8px;
+  margin-top: -4px;
+}
+
+.gauge-chart :deep(.ant-progress) {
+  line-height: 1;
 }
 </style>

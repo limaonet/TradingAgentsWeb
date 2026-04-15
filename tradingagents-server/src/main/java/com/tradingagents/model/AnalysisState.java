@@ -119,6 +119,9 @@ public class AnalysisState {
         reports.put("fundamentalsReport", fundamentalsReport);
         reports.put("investmentPlan", researchManagerDecision);
         reports.put("traderInvestmentPlan", traderInvestmentPlan);
+        reports.put("aggressiveAnalysis", aggressiveAnalysis);
+        reports.put("conservativeAnalysis", conservativeAnalysis);
+        reports.put("neutralAnalysis", neutralAnalysis);
         reports.put("finalTradeDecision", finalTradeDecision);
         return reports;
     }

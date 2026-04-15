@@ -3,6 +3,10 @@ package com.tradingagents.data.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -59,18 +63,14 @@ public class XueqiuClient {
             return Mono.empty();
         }
 
-        // 雪球代码格式：SH/深圳前缀
         String xueqiuSymbol = convertToXueqiuCode(symbol);
 
         return webClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/v5/stock/quotepage.json")
-                        .queryParam("symbol", xueqiuSymbol)
-                        .build())
+                .uri("/S/{symbol}", xueqiuSymbol)
                 .retrieve()
                 .bodyToMono(String.class)
-                .map(this::parseHotRank)
-                .doOnError(e -> log.error("Failed to get xueqiu hot rank for {}: {}", symbol, e.getMessage()))
+                .map(this::parseHotRankFromHtml)
+                .doOnError(e -> log.error("【雪球】获取热度失败 标的={} 原因：{}", symbol, e.getMessage()))
                 .onErrorResume(e -> Mono.empty());
     }
 
@@ -85,14 +85,11 @@ public class XueqiuClient {
         String xueqiuSymbol = convertToXueqiuCode(symbol);
 
         return webClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/query/v1/symbol/search/status.json")
-                        .queryParam("symbol", xueqiuSymbol)
-                        .build())
+                .uri("/S/{symbol}", xueqiuSymbol)
                 .retrieve()
                 .bodyToMono(String.class)
-                .map(this::parseDiscussionCount)
-                .doOnError(e -> log.error("Failed to get xueqiu discussion count for {}: {}", symbol, e.getMessage()))
+                .map(this::parseDiscussionCountFromHtml)
+                .doOnError(e -> log.error("【雪球】获取讨论数失败 标的={} 原因：{}", symbol, e.getMessage()))
                 .onErrorResume(e -> Mono.empty());
     }
 
@@ -107,15 +104,11 @@ public class XueqiuClient {
         String xueqiuSymbol = convertToXueqiuCode(symbol);
 
         return webClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/query/v1/symbol/search/status.json")
-                        .queryParam("symbol", xueqiuSymbol)
-                        .queryParam("count", count)
-                        .build())
+                .uri("/S/{symbol}", xueqiuSymbol)
                 .retrieve()
                 .bodyToMono(String.class)
-                .map(this::parsePostsData)
-                .doOnError(e -> log.error("Failed to get xueqiu posts for {}: {}", symbol, e.getMessage()))
+                .map(html -> parsePostsFromHtml(html, count))
+                .doOnError(e -> log.error("【雪球】获取帖子失败 标的={} 原因：{}", symbol, e.getMessage()))
                 .onErrorResume(e -> Mono.empty());
     }
 
@@ -158,15 +151,21 @@ public class XueqiuClient {
     /**
      * 解析热度排名
      */
-    private Integer parseHotRank(String response) {
+    private Integer parseHotRankFromHtml(String response) {
         try {
-            JsonNode root = objectMapper.readTree(response);
-            JsonNode data = root.get("data");
-            if (data != null && data.has("hot_rank")) {
-                return data.get("hot_rank").asInt();
+            Document doc = Jsoup.parse(response);
+            Elements candidates = doc.select("body *");
+            for (Element element : candidates) {
+                String text = element.text();
+                if (text != null && text.contains("热度")) {
+                    String digits = text.replaceAll("\\D+", "");
+                    if (!digits.isEmpty()) {
+                        return Integer.parseInt(digits);
+                    }
+                }
             }
         } catch (Exception e) {
-            log.error("Failed to parse hot rank: {}", e.getMessage());
+            log.error("【雪球】解析热度失败：{}", e.getMessage());
         }
         return 0;
     }
@@ -174,14 +173,23 @@ public class XueqiuClient {
     /**
      * 解析讨论数
      */
-    private Integer parseDiscussionCount(String response) {
+    private Integer parseDiscussionCountFromHtml(String response) {
         try {
-            JsonNode root = objectMapper.readTree(response);
-            if (root.has("count")) {
-                return root.get("count").asInt();
+            Document doc = Jsoup.parse(response);
+            Elements links = doc.select("a");
+            int estimated = 0;
+            for (Element link : links) {
+                String text = link.text();
+                if (text != null && (text.contains("讨论") || text.contains("评论"))) {
+                    String digits = text.replaceAll("\\D+", "");
+                    if (!digits.isEmpty()) {
+                        estimated = Math.max(estimated, Integer.parseInt(digits));
+                    }
+                }
             }
+            return estimated;
         } catch (Exception e) {
-            log.error("Failed to parse discussion count: {}", e.getMessage());
+            log.error("【雪球】解析讨论数失败：{}", e.getMessage());
         }
         return 0;
     }
@@ -189,41 +197,59 @@ public class XueqiuClient {
     /**
      * 解析帖子数据
      */
-    private Map<String, Object> parsePostsData(String response) {
+    private Map<String, Object> parsePostsFromHtml(String response, int count) {
         Map<String, Object> result = new HashMap<>();
         try {
-            JsonNode root = objectMapper.readTree(response);
-            
-            // 帖子列表
-            if (root.has("list")) {
-                JsonNode list = root.get("list");
-                int positiveCount = 0;
-                int negativeCount = 0;
-                int neutralCount = 0;
-                
-                for (JsonNode post : list) {
-                    // 简单情感判断：根据点赞数和评论数粗略估计
-                    int likeCount = post.has("like_count") ? post.get("like_count").asInt() : 0;
-                    int commentCount = post.has("reply_count") ? post.get("reply_count").asInt() : 0;
-                    
-                    // 热度高的帖子倾向于正面
-                    if (likeCount > 10 || commentCount > 5) {
-                        positiveCount++;
-                    } else if (likeCount < 2 && commentCount < 2) {
-                        negativeCount++;
-                    } else {
-                        neutralCount++;
-                    }
+            Document doc = Jsoup.parse(response);
+            Elements titles = doc.select("a");
+            int positiveCount = 0;
+            int negativeCount = 0;
+            int neutralCount = 0;
+            int total = 0;
+
+            for (Element title : titles) {
+                String text = title.text();
+                if (text == null || text.length() < 8 || text.length() > 80) {
+                    continue;
                 }
-                
-                result.put("totalPosts", list.size());
-                result.put("positivePosts", positiveCount);
-                result.put("negativePosts", negativeCount);
-                result.put("neutralPosts", neutralCount);
+                int sentiment = analyzeSentiment(text);
+                if (sentiment > 0) {
+                    positiveCount++;
+                } else if (sentiment < 0) {
+                    negativeCount++;
+                } else {
+                    neutralCount++;
+                }
+                total++;
+                if (total >= count) {
+                    break;
+                }
             }
+            result.put("totalPosts", total);
+            result.put("positivePosts", positiveCount);
+            result.put("negativePosts", negativeCount);
+            result.put("neutralPosts", neutralCount);
         } catch (Exception e) {
-            log.error("Failed to parse posts data: {}", e.getMessage());
+            log.error("【雪球】解析帖子数据失败：{}", e.getMessage());
         }
         return result;
+    }
+
+    private int analyzeSentiment(String text) {
+        String[] positiveWords = {"涨", "突破", "利好", "看好", "盈利", "增持", "回购"};
+        String[] negativeWords = {"跌", "利空", "风险", "亏损", "减持", "暴跌", "看空"};
+
+        int score = 0;
+        for (String word : positiveWords) {
+            if (text.contains(word)) {
+                score++;
+            }
+        }
+        for (String word : negativeWords) {
+            if (text.contains(word)) {
+                score--;
+            }
+        }
+        return score;
     }
 }

@@ -2,6 +2,7 @@ package com.tradingagents.controller;
 
 import com.tradingagents.model.AnalysisRequest;
 import com.tradingagents.model.AnalysisState;
+import com.tradingagents.model.SymbolSearchItem;
 import com.tradingagents.service.AnalysisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -28,7 +30,7 @@ public class AnalysisController {
      */
     @PostMapping("/start")
     public ResponseEntity<Map<String, String>> startAnalysis(@RequestBody AnalysisRequest request) {
-        log.info("Starting analysis for ticker: {} on date: {}", request.getTicker(), request.getDate());
+        log.info("【分析】收到启动请求：标的={}，日期={}", request.getTicker(), request.getDate());
         
         String analysisId = analysisService.startAnalysis(request);
         
@@ -66,5 +68,15 @@ public class AnalysisController {
         }
         
         return ResponseEntity.ok(state.getAllReports());
+    }
+
+    /**
+     * 股票模糊搜索（用于前端下拉联想）
+     */
+    @GetMapping("/symbols/search")
+    public ResponseEntity<List<SymbolSearchItem>> searchSymbols(
+            @RequestParam("keyword") String keyword,
+            @RequestParam(value = "limit", defaultValue = "10") int limit) {
+        return ResponseEntity.ok(analysisService.searchSymbols(keyword, limit));
     }
 }

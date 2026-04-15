@@ -32,7 +32,7 @@ public class MarketAnalystAgent {
      * 执行市场分析
      */
     public String analyze(String analysisId, String symbol, String date) {
-        log.info("Market Analyst starting analysis for {} on {}", symbol, date);
+        log.info("【市场分析师】开始分析 标的={} 日期={}", symbol, date);
         progressHandler.sendAgentStatus(analysisId, "market_analyst", "running", "正在获取市场数据...");
         
         try {
@@ -42,9 +42,15 @@ public class MarketAnalystAgent {
             
             // 获取历史行情数据
             List<StockData> historyData = stockDataService.getStockHistory(symbol, startDate, analysisDate).block();
+            if (historyData == null || historyData.size() < 20) {
+                throw new IllegalStateException("市场数据不足，无法完成技术分析: " + symbol);
+            }
             
             // 获取技术指标
             TechnicalIndicators indicators = stockDataService.getTechnicalIndicators(symbol, analysisDate).block();
+            if (indicators == null) {
+                throw new IllegalStateException("技术指标计算失败: " + symbol);
+            }
             
             progressHandler.sendAgentStatus(analysisId, "market_analyst", "running", "正在分析技术指标...");
             
@@ -58,11 +64,11 @@ public class MarketAnalystAgent {
             progressHandler.sendAgentStatus(analysisId, "market_analyst", "completed", "市场分析完成");
             progressHandler.sendReport(analysisId, "market_report", report);
             
-            log.info("Market Analyst completed analysis for {}", symbol);
+            log.info("【市场分析师】分析完成 标的={}", symbol);
             return report;
             
         } catch (Exception e) {
-            log.error("Market Analyst failed for {}: {}", symbol, e.getMessage());
+            log.error("【市场分析师】失败 标的={} 原因：{}", symbol, e.getMessage());
             progressHandler.sendError(analysisId, "market_analyst", e.getMessage());
             throw new RuntimeException("市场分析失败", e);
         }
