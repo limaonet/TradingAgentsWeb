@@ -45,6 +45,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import SearchHeader from '@/components/topbar/SearchHeader.vue'
 import AnalystTeam from '@/components/sidebar/AnalystTeam.vue'
 import DebateArena from '@/components/debate/DebateArena.vue'
@@ -55,6 +56,7 @@ import { startAnalysis } from '@/api/analysisApi'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { message } from 'ant-design-vue'
 
+const route = useRoute()
 const store = useAnalysisStore()
 const { connect, disconnect } = useWebSocket()
 let hydrateTimer: ReturnType<typeof setInterval> | null = null
@@ -233,6 +235,11 @@ const handleAnalystSelect = (id: string) => {
 onMounted(() => {
   // 加载深色主题
   document.documentElement.classList.add('dark-theme')
+  const raw = route.query.analysisId
+  const idFromQuery = Array.isArray(raw) ? raw[0] : raw
+  if (typeof idFromQuery === 'string' && idFromQuery.trim()) {
+    localStorage.setItem('tradingagents_last_analysis_id', idFromQuery.trim())
+  }
   const cachedAnalysisId = localStorage.getItem('tradingagents_last_analysis_id')
   if (cachedAnalysisId) {
     store.hydrateFromServer(cachedAnalysisId).then(() => {

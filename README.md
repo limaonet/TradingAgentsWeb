@@ -70,6 +70,14 @@ tradingagents-web/
    - 风控团队（三方辩论）
    - 组合经理
 
+## 界面预览
+
+| 整页 | 主内容区 | 底部流程 |
+|:---:|:---:|:---:|
+| ![仪表盘](docs/images/screenshot-dashboard-full.png) | ![主网格](docs/images/screenshot-main-grid.png) | ![流程条](docs/images/screenshot-bottom-pipeline.png) |
+
+更多说明见 **[docs/screenshots.md](docs/screenshots.md)**。支持通过 `http://localhost:5173/?analysisId=<id>` 打开指定分析（需后端仍有该任务缓存）。
+
 ## 分析流程图（GitHub 展示）
 
 仓库根目录与 [docs/analysis-pipeline.md](docs/analysis-pipeline.md) 使用 **Mermaid** 描述流水线；在 GitHub 打开该 Markdown 即可直接看到渲染后的流程图（无需额外服务）。
