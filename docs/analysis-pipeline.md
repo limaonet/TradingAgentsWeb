@@ -2,6 +2,26 @@
 
 本文档与 `tradingagents-server` 中 `AnalysisService#executeAnalysisFlow` 的**实际执行顺序**一致。GitHub 会渲染文中的 Mermaid 图。
 
+## Agent 一览（谁负责什么）
+
+下表为流水线中的 **LangChain4j Agent**：Spring `@Component` 类名、所用模型档位、**读入什么**、**产出什么**、以及推送到前端的 WS 角色名（与 `analysisStore` 对齐）。编排层 `AnalysisService` 本身不是 Agent。
+
+| # | 展示名 | Java 类 | 模型 | 主要输入 | 主要输出 | WS / 报告类型 |
+|---|--------|---------|------|----------|----------|----------------|
+| 1 | 市场分析师 | `MarketAnalystAgent` | 快速模型 `quickThinkingModel` | 标的、日期；`StockDataService` 拉行情与技术指标 | 技术分析报告（Markdown） | `market_analyst` → `market_report` |
+| 2 | 情绪分析师 | `SentimentAnalystAgent` | 快速模型 | 标的、日期；`SentimentDataService` 拉舆情/社区等 | 情绪与舆情分析报告 | `sentiment_analyst` → `sentiment_report` |
+| 3 | 基本面分析师 | `FundamentalsAnalystAgent` | 快速模型 | 标的、日期；财务与基本面数据 | 基本面分析报告 | `fundamentals_analyst` → `fundamentals_report` |
+| 4 | 研究经理 | `ResearchManagerAgent` | 深度模型 `deepThinkingModel` | 上述三份报告（当前编排里「新闻」参数传 `null`，由情绪报告覆盖舆情） | **投资计划** `investment_plan` | `research_manager` |
+| 5 | 交易员 | `TraderAgent` | 深度模型 | 投资计划全文 | **交易计划** `trader_plan`（可执行层面的方案） | `trader` |
+| 6a | 激进派风控 | `RiskManagementAgents#aggressiveAnalysis` | 深度模型；内部 `AggressiveDebater` | 市场/情绪/基本面报告 + 交易计划 | 激进立场风险论述 | `debate` · speaker `aggressive` |
+| 6b | 保守派风控 | `RiskManagementAgents#conservativeAnalysis` | 深度模型；`ConservativeDebater` | 同上 | 保守立场风险论述 | `debate` · speaker `conservative` |
+| 6c | 中立派风控 | `RiskManagementAgents#neutralAnalysis` | 深度模型；`NeutralDebater` | 同上 + **激进 + 保守** 两段文字 | 折中后的风险综合意见 | `debate` · speaker `neutral` |
+| 7 | 组合经理 | `PortfolioManagerAgent` | 深度模型；`PortfolioManager` 接口 | 三份分析师报告 + 投资计划 + 交易计划 + **三份风控观点** | **最终交易决策**（并触发 `sendComplete`） | `portfolio_manager` · `complete` |
+
+**并行关系**：表 1–3 同时跑；表 6a 与 6b 同时跑，二者结束后才跑 6c。
+
+---
+
 ## 阶段说明（谁在做什么）
 
 | 阶段 | 角色 | 职责 |
@@ -49,30 +69,30 @@ flowchart TB
         E3["创建 AnalysisState<br/>返回 analysisId，异步执行流水线"]
     end
 
-    subgraph G3["④ Phase 1 · 三分析师并行"]
-        A1["「市场分析师」<br/>MarketAnalystAgent<br/>────────<br/>K 线、均线、MACD/RSI/KDJ、<br/>趋势与支撑阻力等技术面结论"]
-        A2["「情绪分析师」<br/>SentimentAnalystAgent<br/>────────<br/>舆情、新闻倾向、社区情绪、<br/>公告与情绪面结论"]
-        A3["「基本面分析师」<br/>FundamentalsAnalystAgent<br/>────────<br/>盈利/偿债/成长/现金流、<br/>估值与财务质量结论"]
+    subgraph G3["④ Phase 1 · Agent 并行（快速模型）"]
+        A1["Agent · 市场分析师<br/>MarketAnalystAgent<br/>────────<br/>读：行情与技术指标<br/>写：技术面 Markdown 报告"]
+        A2["Agent · 情绪分析师<br/>SentimentAnalystAgent<br/>────────<br/>读：舆情与社区数据<br/>写：情绪面 Markdown 报告"]
+        A3["Agent · 基本面分析师<br/>FundamentalsAnalystAgent<br/>────────<br/>读：财务与估值数据<br/>写：基本面 Markdown 报告"]
         J1{"三份报告<br/>到齐"}
     end
 
-    subgraph G4["⑤ Phase 2"]
-        R1["「研究经理」<br/>ResearchManagerAgent<br/>────────<br/>整合三维报告，识别一致与分歧，<br/>输出综合投资计划"]
+    subgraph G4["⑤ Phase 2 · Agent（深度模型）"]
+        R1["Agent · 研究经理<br/>ResearchManagerAgent<br/>────────<br/>读：市场+情绪+基本面报告<br/>写：综合投资计划 investment_plan"]
     end
 
-    subgraph G5["⑥ Phase 3"]
-        T1["「交易员」<br/>TraderAgent<br/>────────<br/>把投资计划落实为可执行方案：<br/>入场、止盈止损、仓位与节奏"]
+    subgraph G5["⑥ Phase 3 · Agent（深度模型）"]
+        T1["Agent · 交易员<br/>TraderAgent<br/>────────<br/>读：投资计划<br/>写：可执行交易计划 trader_plan"]
     end
 
-    subgraph G6["⑦ Phase 4 · 风控（并行 → 综合）"]
-        V1["「激进派风控」<br/>────────<br/>偏进攻：强调机会与收益弹性"]
-        V2["「保守派风控」<br/>────────<br/>偏防守：强调回撤与安全边际"]
+    subgraph G6["⑦ Phase 4 · Agent 风控（深度模型）"]
+        V1["Agent · 激进派<br/>RiskManagementAgents + AggressiveDebater<br/>────────<br/>读：三报告 + 交易计划<br/>写：进攻型风险观点"]
+        V2["Agent · 保守派<br/>RiskManagementAgents + ConservativeDebater<br/>────────<br/>读：同上<br/>写：防守型风险观点"]
         J2{"双方观点<br/>到齐"}
-        V3["「中立派风控」<br/>────────<br/>在激进与保守之间折中，<br/>形成平衡风险视图"]
+        V3["Agent · 中立派<br/>RiskManagementAgents + NeutralDebater<br/>────────<br/>读：同上 + 激进/保守全文<br/>写：折中风险综合意见"]
     end
 
-    subgraph G7["⑧ Phase 5 · 收官"]
-        P1["「组合经理」<br/>PortfolioManagerAgent<br/>────────<br/>汇总报告、计划与风控意见，<br/>输出最终交易决策（对外结论）"]
+    subgraph G7["⑧ Phase 5 · Agent 收官（深度模型）"]
+        P1["Agent · 组合经理<br/>PortfolioManagerAgent<br/>────────<br/>读：三报告 + 两计划 + 三风控<br/>写：最终决策 + WS complete"]
         Z1["持久化状态 · 推送 WS complete<br/>前端展示完成态"]
     end
 

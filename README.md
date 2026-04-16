@@ -112,7 +112,7 @@ flowchart LR
     R1 & R2 --> Y --> R3 --> PM
 ```
 
-更细的**全链路大图**、**职责表**与**时序图**见 **[docs/analysis-pipeline.md](docs/analysis-pipeline.md)**。
+更细的**全链路大图**、**每个 Agent 的 Java 类 / 输入输出 / WS 字段说明**与**时序图**见 **[docs/analysis-pipeline.md](docs/analysis-pipeline.md)**（文档开头的 **Agent 一览** 表）。
 
 ## 快速开始
 
