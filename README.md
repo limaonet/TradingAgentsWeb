@@ -70,6 +70,41 @@ tradingagents-web/
    - 风控团队（三方辩论）
    - 组合经理
 
+## 分析流程图（GitHub 展示）
+
+仓库根目录与 [docs/analysis-pipeline.md](docs/analysis-pipeline.md) 使用 **Mermaid** 描述流水线；在 GitHub 打开该 Markdown 即可直接看到渲染后的流程图（无需额外服务）。
+
+与当前后端编排一致的总览如下：
+
+```mermaid
+flowchart TD
+    subgraph P1["Phase 1 · 并行"]
+        M[市场分析师]
+        S[情绪分析师]
+        F[基本面分析师]
+    end
+    RM[研究经理]
+    TR[交易员]
+    subgraph P4["Phase 4 · 风控"]
+        AG[激进派]
+        CS[保守派]
+        NT[中立派]
+    end
+    PM[组合经理 · 最终决策]
+
+    M --> RM
+    S --> RM
+    F --> RM
+    RM --> TR
+    TR --> AG
+    TR --> CS
+    AG --> NT
+    CS --> NT
+    NT --> PM
+```
+
+更细的步骤说明与前后端时序图见 **[docs/analysis-pipeline.md](docs/analysis-pipeline.md)**。
+
 ## 快速开始
 
 ### 环境要求
