@@ -183,6 +183,7 @@ const handleSearch = async (payload: string | { ticker: string; displayName?: st
   const ticker = typeof payload === 'string' ? payload : payload.ticker
   const displayName = typeof payload === 'string' ? payload : payload.displayName
   if (!ticker?.trim() || store.analysisBusy) return
+  store.setAnalysisStarting(true)
   try {
     const end = new Date()
     

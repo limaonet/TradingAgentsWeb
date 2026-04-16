@@ -1,6 +1,7 @@
 import { ref, onUnmounted } from 'vue'
 import { Client, type IMessage, type IFrame } from '@stomp/stompjs'
 import { useAnalysisStore } from '@/stores/analysisStore'
+import { getWsBrokerUrl } from '@/config/apiConfig'
 
 export function useWebSocket() {
   const client = ref<Client | null>(null)
@@ -11,10 +12,7 @@ export function useWebSocket() {
 
     const store = useAnalysisStore()
 
-    // 使用原生 WebSocket（不依赖 sockjs-client）
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsHost = window.location.host
-    const wsUrl = `${wsProtocol}//${wsHost}/ws/websocket`
+    const wsUrl = getWsBrokerUrl()
 
     const stompClient = new Client({
       brokerURL: wsUrl,

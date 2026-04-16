@@ -106,7 +106,6 @@ onMounted(() => {
 const handleSearch = () => {
   if (!ticker.value.trim() || store.analysisBusy) return
 
-  store.setAnalysisStarting(true)
   const selected = suggestions.value.find((s) => s.ticker === ticker.value.trim())
   emit('search', {
     ticker: ticker.value.trim(),
