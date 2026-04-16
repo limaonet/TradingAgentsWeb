@@ -74,36 +74,45 @@ tradingagents-web/
 
 仓库根目录与 [docs/analysis-pipeline.md](docs/analysis-pipeline.md) 使用 **Mermaid** 描述流水线；在 GitHub 打开该 Markdown 即可直接看到渲染后的流程图（无需额外服务）。
 
-与当前后端编排一致的总览如下：
+从**用户输入**到**最终决策**的缩略图如下（配色与职责说明见完整文档）。
 
 ```mermaid
-flowchart TD
-    subgraph P1["Phase 1 · 并行"]
-        M[市场分析师]
-        S[情绪分析师]
-        F[基本面分析师]
-    end
-    RM[研究经理]
-    TR[交易员]
-    subgraph P4["Phase 4 · 风控"]
-        AG[激进派]
-        CS[保守派]
-        NT[中立派]
-    end
-    PM[组合经理 · 最终决策]
+flowchart LR
+    classDef user fill:#e8f5e9,stroke:#1b5e20,color:#1b3310
+    classDef fe fill:#e3f2fd,stroke:#0d47a1,color:#0d1740
+    classDef sys fill:#fce4ec,stroke:#880e4f,color:#3e0d24
+    classDef ag fill:#fff8e1,stroke:#e65100,color:#3e2723
 
-    M --> RM
-    S --> RM
-    F --> RM
-    RM --> TR
-    TR --> AG
-    TR --> CS
-    AG --> NT
-    CS --> NT
-    NT --> PM
+    U["用户<br/>代码/名称 + 日期"]:::user
+    FE["前端<br/>POST start + WS 订阅"]:::fe
+    IN["入口<br/>解析代码 · 建任务"]:::sys
+
+    subgraph P1["Phase 1 并行"]
+        M1["市场<br/>技术面"]:::ag
+        M2["情绪<br/>舆情面"]:::ag
+        M3["基本面<br/>财务估值"]:::ag
+    end
+    X{"报告到齐"}:::sys
+
+    RM["研究经理<br/>投资计划"]:::ag
+    TR["交易员<br/>交易计划"]:::ag
+
+    subgraph P4["Phase 4"]
+        R1["激进风控"]:::ag
+        R2["保守风控"]:::ag
+        Y{"观点到齐"}:::sys
+        R3["中立风控<br/>折中综合"]:::ag
+    end
+
+    PM["组合经理<br/>最终决策"]:::ag
+
+    U --> FE --> IN --> M1 & M2 & M3
+    M1 & M2 & M3 --> X --> RM --> TR
+    TR --> R1 & R2
+    R1 & R2 --> Y --> R3 --> PM
 ```
 
-更细的步骤说明与前后端时序图见 **[docs/analysis-pipeline.md](docs/analysis-pipeline.md)**。
+更细的**全链路大图**、**职责表**与**时序图**见 **[docs/analysis-pipeline.md](docs/analysis-pipeline.md)**。
 
 ## 快速开始
 
