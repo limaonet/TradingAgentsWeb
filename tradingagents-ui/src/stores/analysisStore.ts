@@ -21,11 +21,38 @@ export interface TimelineMessage {
   timestamp: string
   agent: string
   agentName: string
-  type: 'progress' | 'report' | 'agent_status' | 'debate' | 'complete' | 'error'
+  type: 'progress' | 'report' | 'agent_status' | 'debate' | 'complete' | 'error' | 'causal_graph'
   status: string
   content: string
   debateType?: string
   round?: number
+}
+
+export interface CausalNodeData {
+  id: string
+  type: string
+  label: string
+  description?: string
+  eventTime?: string
+  sourceRef?: string
+  confidence?: number
+}
+
+export interface CausalEdgeData {
+  id?: string
+  source: string
+  target: string
+  relation?: string
+  strength?: number
+  evidence?: string
+  confidence?: number
+  edgeType?: string
+}
+
+export interface CausalGraphData {
+  nodes: CausalNodeData[]
+  edges: CausalEdgeData[]
+  summary?: string
 }
 
 // Agent 元数据定义
@@ -33,6 +60,7 @@ const AGENT_META: Record<string, { name: string; role: string; phase: number; ic
   market_analyst: { name: '市场分析师', role: '技术面分析：K线、MACD、RSI、KDJ、均线、支撑阻力位', phase: 1, icon: '📊' },
   sentiment_analyst: { name: '情绪分析师', role: '舆情分析：市场情绪、新闻倾向、社交热度、公告解读', phase: 1, icon: '💭' },
   fundamentals_analyst: { name: '基本面分析师', role: '财务分析：盈利能力、偿债能力、估值水平、现金流', phase: 1, icon: '📈' },
+  causal_analyst: { name: '因果分析师', role: '事件因果链：新闻事件→传导因子→市场指标→投资结果', phase: 1, icon: '🔗' },
   research_manager: { name: '研究经理', role: '综合三维分析，识别一致性与分歧，制定投资策略', phase: 2, icon: '👨‍💼' },
   trader: { name: '交易员', role: '将投资计划具体化：入场价位、止盈止损、仓位管理', phase: 3, icon: '💼' },
   aggressive_risk: { name: '激进派风控', role: '强调收益机会，承担合理风险，优化收益方案', phase: 4, icon: '⚡' },
@@ -49,6 +77,8 @@ const AGENT_NAME_MAP: Record<string, string> = {
   'sentiment_analyst': 'sentiment_analyst',
   'FundamentalsAnalyst': 'fundamentals_analyst',
   'fundamentals_analyst': 'fundamentals_analyst',
+  'CausalAnalyst': 'causal_analyst',
+  'causal_analyst': 'causal_analyst',
   'ResearchManager': 'research_manager',
   'research_manager': 'research_manager',
   'Trader': 'trader',
@@ -72,6 +102,7 @@ const REPORT_TYPE_MAP: Record<string, string> = {
   'market_report': 'market_analyst',
   'sentiment_report': 'sentiment_analyst',
   'fundamentals_report': 'fundamentals_analyst',
+  'causal_report': 'causal_analyst',
   'investment_plan': 'research_manager',
   'trader_plan': 'trader',
   'marketReport': 'market_analyst',
@@ -115,6 +146,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
   const timelineMessages = ref<TimelineMessage[]>([])
   const syncedState = ref<any>(null)
   const reportsCache = ref<Record<string, string>>({})
+  const causalGraph = ref<CausalGraphData | null>(null)
 
   // 计时器
   let timerHandle: ReturnType<typeof setInterval> | null = null
@@ -178,6 +210,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     timelineMessages.value = []
     syncedState.value = null
     reportsCache.value = {}
+    causalGraph.value = null
     startTime.value = Date.now()
     elapsedSeconds.value = 0
 
@@ -268,6 +301,16 @@ export const useAnalysisStore = defineStore('analysis', () => {
         break
       }
 
+      case 'causal_graph':
+        if (msg.graph) {
+          causalGraph.value = msg.graph as CausalGraphData
+        }
+        if (nodes.value.causal_analyst) {
+          nodes.value.causal_analyst.status = 'completed'
+          nodes.value.causal_analyst.content = msg.content || causalGraph.value?.summary || ''
+        }
+        break
+
       case 'complete':
         status.value = 'completed'
         progress.value = 100
@@ -310,6 +353,9 @@ export const useAnalysisStore = defineStore('analysis', () => {
     }
     if (reports.fundamentalsReport) {
       setNodeReport('fundamentals_analyst', reports.fundamentalsReport)
+    }
+    if (reports.causalReport) {
+      setNodeReport('causal_analyst', reports.causalReport)
     }
     if (reports.investmentPlan) {
       setNodeReport('research_manager', reports.investmentPlan)
@@ -356,12 +402,17 @@ export const useAnalysisStore = defineStore('analysis', () => {
         marketReport: stateResp?.marketReport || reportsResp?.marketReport || '',
         sentimentReport: stateResp?.sentimentReport || reportsResp?.sentimentReport || '',
         fundamentalsReport: stateResp?.fundamentalsReport || reportsResp?.fundamentalsReport || '',
+        causalReport: stateResp?.causalReport || reportsResp?.causalReport || '',
         investmentPlan: reportsResp?.investmentPlan || '',
         traderInvestmentPlan: reportsResp?.traderInvestmentPlan || '',
         aggressiveAnalysis: stateResp?.aggressiveAnalysis || reportsResp?.aggressiveAnalysis || '',
         conservativeAnalysis: stateResp?.conservativeAnalysis || reportsResp?.conservativeAnalysis || '',
         neutralAnalysis: stateResp?.neutralAnalysis || reportsResp?.neutralAnalysis || '',
         finalTradeDecision: stateResp?.finalTradeDecision || reportsResp?.finalTradeDecision || '',
+      }
+
+      if (stateResp?.causalGraph) {
+        causalGraph.value = stateResp.causalGraph as CausalGraphData
       }
 
       if (stateResp?.ticker) ticker.value = stateResp.ticker
@@ -401,7 +452,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     // state
     analysisId, status, progress, currentAgent, selectedNodeId,
     ticker, date, startTime, elapsedSeconds,
-    nodes, timelineMessages, syncedState, reportsCache,
+    nodes, timelineMessages, syncedState, reportsCache, causalGraph,
     // computed
     selectedNode, nodeList, completedCount, totalNodes, isRunning, isStarting, analysisBusy,
     reportViewerOpen, reportViewerTitle, reportViewerBody,

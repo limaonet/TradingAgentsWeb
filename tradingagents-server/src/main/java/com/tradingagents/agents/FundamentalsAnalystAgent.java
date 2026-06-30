@@ -106,6 +106,16 @@ public class FundamentalsAnalystAgent {
             prompt.append(String.format("资产负债率: %.2f%%\n", data.getDebtToAsset()));
         }
         prompt.append("\n");
+
+        // 成长能力
+        prompt.append("【成长能力指标】\n");
+        if (data.getRevenueGrowth() != null) {
+            prompt.append(String.format("营收增长率: %.2f%%\n", data.getRevenueGrowth()));
+        }
+        if (data.getProfitGrowth() != null) {
+            prompt.append(String.format("净利润增长率: %.2f%%\n", data.getProfitGrowth()));
+        }
+        prompt.append("\n");
         
         // 估值指标
         prompt.append("【估值指标】\n");

@@ -29,6 +29,7 @@ public class AnalysisService {
     private final MarketAnalystAgent marketAnalystAgent;
     private final SentimentAnalystAgent sentimentAnalystAgent;
     private final FundamentalsAnalystAgent fundamentalsAnalystAgent;
+    private final CausalAnalystAgent causalAnalystAgent;
     private final ResearchManagerAgent researchManagerAgent;
     private final TraderAgent traderAgent;
     private final RiskManagementAgents riskManagementAgents;
@@ -105,30 +106,30 @@ public class AnalysisService {
                     String marketReport = tuple.getT1();
                     String sentimentReport = tuple.getT2();
                     String fundamentalsReport = tuple.getT3();
-                    
-                    // Phase 2: 研究经理生成投资计划
-                    return executeResearchManager(analysisId, symbol, date, 
+
+                    return executeCausalAnalysis(analysisId, symbol, date,
                             marketReport, sentimentReport, fundamentalsReport)
-                            .flatMap(investmentPlan -> {
-                                // Phase 3: 交易员生成交易计划
-                                return executeTrader(analysisId, symbol, date, investmentPlan)
-                                        .flatMap(tradePlan -> {
-                                            // Phase 4: 风控辩论
-                                            return executeRiskDebate(analysisId, symbol, date,
-                                                    marketReport, sentimentReport, fundamentalsReport, tradePlan)
-                                                    .flatMap(riskViews -> {
-                                                        updateState(analysisId, state -> {
-                                                            state.setAggressiveAnalysis(riskViews.aggressive());
-                                                            state.setConservativeAnalysis(riskViews.conservative());
-                                                            state.setNeutralAnalysis(riskViews.neutral());
-                                                        });
-                                                        // Phase 5: 组合经理生成最终决策
-                                                        return executePortfolioManager(analysisId, symbol, date,
-                                                                marketReport, sentimentReport, fundamentalsReport,
-                                                                investmentPlan, tradePlan, riskViews);
-                                                    });
-                                        });
-                            });
+                            .flatMap(causalResult ->
+                                    executeResearchManager(analysisId, symbol, date,
+                                            marketReport, sentimentReport, fundamentalsReport, causalResult.summary())
+                                            .flatMap(investmentPlan ->
+                                                    executeTrader(analysisId, symbol, date, investmentPlan)
+                                                            .flatMap(tradePlan ->
+                                                                    executeRiskDebate(analysisId, symbol, date,
+                                                                            marketReport, sentimentReport, fundamentalsReport, tradePlan)
+                                                                            .flatMap(riskViews -> {
+                                                                                updateState(analysisId, state -> {
+                                                                                    state.setAggressiveAnalysis(riskViews.aggressive());
+                                                                                    state.setConservativeAnalysis(riskViews.conservative());
+                                                                                    state.setNeutralAnalysis(riskViews.neutral());
+                                                                                });
+                                                                                return executePortfolioManager(analysisId, symbol, date,
+                                                                                        marketReport, sentimentReport, fundamentalsReport,
+                                                                                        investmentPlan, tradePlan, riskViews);
+                                                                            })
+                                                            )
+                                            )
+                            );
                 })
                 .then();
     }
@@ -161,14 +162,30 @@ public class AnalysisService {
     }
 
     /**
+     * 执行因果分析
+     */
+    private Mono<CausalAnalystAgent.CausalAnalysisResult> executeCausalAnalysis(
+            String analysisId, String symbol, String date,
+            String marketReport, String sentimentReport, String fundamentalsReport) {
+        return Mono.fromCallable(() ->
+                        causalAnalystAgent.analyze(analysisId, symbol, date,
+                                marketReport, sentimentReport, fundamentalsReport))
+                .doOnSuccess(result -> updateState(analysisId, state -> {
+                    state.setCausalReport(result.summary());
+                    state.setCausalGraph(result.graph());
+                }))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
      * 执行研究经理
      */
     private Mono<String> executeResearchManager(String analysisId, String symbol, String date,
                                                  String marketReport, String sentimentReport,
-                                                 String fundamentalsReport) {
-        return Mono.fromCallable(() -> 
+                                                 String fundamentalsReport, String causalReport) {
+        return Mono.fromCallable(() ->
                         researchManagerAgent.generateInvestmentPlan(analysisId, symbol, date,
-                                marketReport, sentimentReport, null, fundamentalsReport))
+                                marketReport, sentimentReport, causalReport, fundamentalsReport))
                 .doOnSuccess(plan -> updateState(analysisId, state -> state.setResearchManagerDecision(plan)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
