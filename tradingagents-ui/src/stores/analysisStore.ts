@@ -456,6 +456,10 @@ export const useAnalysisStore = defineStore('analysis', () => {
       if (stateResp?.status === 'completed' || stateResp?.status === 'error' || stateResp?.status === 'running') {
         status.value = stateResp.status
       }
+      if (stateResp?.finalTradeDecision || stateResp?.status === 'completed') {
+        status.value = 'completed'
+        progress.value = 100
+      }
       if (stateResp?.status === 'completed') progress.value = 100
 
       syncNodeStatusesFromAgentStatuses(stateResp?.agentStatuses || {})

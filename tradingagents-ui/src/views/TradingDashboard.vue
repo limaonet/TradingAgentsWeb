@@ -14,7 +14,7 @@
 
         <!-- 中间：辩论区 / 因果链 -->
         <div class="grid-center">
-          <a-tabs v-model:activeKey="centerTab" class="center-tabs">
+          <a-tabs v-model:activeKey="centerTab" class="center-tabs" destroy-inactive-tab-pane>
             <a-tab-pane key="debate" tab="风控辩论">
               <DebateArena
                 :messages="debateMessages"

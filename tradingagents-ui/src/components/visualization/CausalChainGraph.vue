@@ -356,7 +356,11 @@ watch(
 )
 
 onMounted(() => {
-  nextTick(() => renderGraph())
+  nextTick(() => {
+    renderGraph()
+    // Tab 刚挂载时容器宽度可能尚未稳定，延迟再绘一次
+    setTimeout(() => renderGraph(), 150)
+  })
   syncLiveState()
 })
 onUnmounted(() => {
