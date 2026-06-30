@@ -64,7 +64,7 @@ public class ResearchManagerAgent {
         prompt.append("【情绪分析报告】\n");
         prompt.append(sentimentReport != null ? sentimentReport : "无数据").append("\n\n");
         
-        prompt.append("【新闻分析报告】\n");
+        prompt.append("【因果链分析报告】\n");
         prompt.append(newsReport != null ? newsReport : "无数据").append("\n\n");
         
         prompt.append("【基本面分析报告】\n");

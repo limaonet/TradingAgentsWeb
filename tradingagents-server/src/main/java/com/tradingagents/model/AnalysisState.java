@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.tradingagents.data.model.CausalGraph;
+
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -80,6 +82,8 @@ public class AnalysisState {
     private String sentimentReport;
     private String newsReport;
     private String fundamentalsReport;
+    private String causalReport;
+    private CausalGraph causalGraph;
     
     // ============ 研究辩论 ============
     
@@ -117,6 +121,7 @@ public class AnalysisState {
         reports.put("sentimentReport", sentimentReport);
         reports.put("newsReport", newsReport);
         reports.put("fundamentalsReport", fundamentalsReport);
+        reports.put("causalReport", causalReport);
         reports.put("investmentPlan", researchManagerDecision);
         reports.put("traderInvestmentPlan", traderInvestmentPlan);
         reports.put("aggressiveAnalysis", aggressiveAnalysis);

@@ -2,6 +2,7 @@ package com.tradingagents.data.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.tradingagents.data.client.EastMoneyClient;
+import com.tradingagents.data.client.EastMoneyDataCenterClient;
 import com.tradingagents.data.client.SinaMarketClient;
 import com.tradingagents.data.model.FundamentalData;
 import com.tradingagents.data.model.StockData;
@@ -28,6 +29,7 @@ import java.util.Map;
 public class StockDataService {
 
     private final EastMoneyClient eastMoneyClient;
+    private final EastMoneyDataCenterClient eastMoneyDataCenterClient;
     private final SinaMarketClient sinaMarketClient;
 
     /**
@@ -66,9 +68,13 @@ public class StockDataService {
      */
     public Mono<FundamentalData> getFundamentalData(String symbol, String period) {
         validateSymbol(symbol);
-        // 东方财富不直接提供财务数据，返回模拟数据
-        // 实际项目中可以接入其他财务数据源
-        return Mono.just(createMockFundamentalData(symbol, period));
+        return eastMoneyDataCenterClient.getFundamentalData(symbol, period)
+                .flatMap(data -> {
+                    if (data.getRoe() == null && data.getPeRatio() == null && data.getOperatingCashFlow() == null) {
+                        return Mono.error(new IllegalStateException("东财数据中心未返回有效基本面: " + symbol));
+                    }
+                    return Mono.just(data);
+                });
     }
 
     /**
@@ -265,25 +271,4 @@ public class StockDataService {
         }
     }
 
-    /**
-     * 创建模拟基本面数据
-     */
-    private FundamentalData createMockFundamentalData(String symbol, String period) {
-        return FundamentalData.builder()
-                .tsCode(symbol)
-                .endDate(period)
-                .roe(new BigDecimal("15.5"))
-                .roa(new BigDecimal("8.2"))
-                .grossMargin(new BigDecimal("35.0"))
-                .netMargin(new BigDecimal("12.5"))
-                .currentRatio(new BigDecimal("1.8"))
-                .quickRatio(new BigDecimal("1.5"))
-                .debtToAsset(new BigDecimal("45.0"))
-                .peRatio(new BigDecimal("20.5"))
-                .pbRatio(new BigDecimal("2.8"))
-                .operatingCashFlow(new BigDecimal("100000"))
-                .investingCashFlow(new BigDecimal("-50000"))
-                .financingCashFlow(new BigDecimal("-20000"))
-                .build();
-    }
 }

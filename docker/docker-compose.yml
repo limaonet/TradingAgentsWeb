@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # Backend Service
   backend:
     build:
       context: ..
@@ -11,11 +10,20 @@ services:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=prod
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - TUSHARE_TOKEN=${TUSHARE_TOKEN}
-      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
+      - ANALYSIS_STORAGE=redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-}
+      - DEFAULT_CHAT_MODEL=${DEFAULT_CHAT_MODEL:-}
+      - DEFAULT_QUICK_MODEL=${DEFAULT_QUICK_MODEL:-minimax/minimax-m2.5}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - TUSHARE_TOKEN=${TUSHARE_TOKEN:-}
+      - XUEQIU_COOKIE=${XUEQIU_COOKIE:-}
+      - GUBA_COOKIE=${GUBA_COOKIE:-}
+    depends_on:
+      redis:
+        condition: service_started
     networks:
       - tradingagents-network
     restart: unless-stopped
@@ -24,9 +32,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 90s
 
-  # Frontend Service
   frontend:
     build:
       context: ..
@@ -35,12 +42,12 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - tradingagents-network
     restart: unless-stopped
 
-  # Optional: Redis for caching
   redis:
     image: redis:7-alpine
     container_name: tradingagents-redis
@@ -52,6 +59,11 @@ services:
       - tradingagents-network
     restart: unless-stopped
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 networks:
   tradingagents-network:

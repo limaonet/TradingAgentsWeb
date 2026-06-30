@@ -12,14 +12,21 @@
           <AnalystTeam :analysts="analysts" @select="handleAnalystSelect" />
         </div>
 
-        <!-- 中间：辩论区 -->
+        <!-- 中间：辩论区 / 因果链 -->
         <div class="grid-center">
-          <DebateArena
-            :messages="debateMessages"
-            :risks="riskAssessments"
-            :status="debateStatus"
-            @open-risk-detail="openRiskDetail"
-          />
+          <a-tabs v-model:activeKey="centerTab" class="center-tabs">
+            <a-tab-pane key="debate" tab="风控辩论">
+              <DebateArena
+                :messages="debateMessages"
+                :risks="riskAssessments"
+                :status="debateStatus"
+                @open-risk-detail="openRiskDetail"
+              />
+            </a-tab-pane>
+            <a-tab-pane key="causal" tab="因果链">
+              <CausalChainGraph />
+            </a-tab-pane>
+          </a-tabs>
         </div>
 
         <!-- 右侧：最终决策 -->
@@ -44,13 +51,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import SearchHeader from '@/components/topbar/SearchHeader.vue'
 import AnalystTeam from '@/components/sidebar/AnalystTeam.vue'
 import DebateArena from '@/components/debate/DebateArena.vue'
 import DecisionPanel from '@/components/decision/DecisionPanel.vue'
 import AnalysisPipeline from '@/components/timeline/AnalysisPipeline.vue'
+import CausalChainGraph from '@/components/visualization/CausalChainGraph.vue'
 import { useAnalysisStore } from '@/stores/analysisStore'
 import { startAnalysis } from '@/api/analysisApi'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -59,6 +67,7 @@ import { message } from 'ant-design-vue'
 const route = useRoute()
 const store = useAnalysisStore()
 const { connect, disconnect } = useWebSocket()
+const centerTab = ref('debate')
 let hydrateTimer: ReturnType<typeof setInterval> | null = null
 
 const openRiskDetail = (payload: { name: string; content: string }) => {
@@ -174,6 +183,7 @@ const pipelineStages = computed(() => {
     { name: '市场分析', status: mapStatus(['market_analyst']) },
     { name: '情绪分析', status: mapStatus(['sentiment_analyst']) },
     { name: '基本面分析', status: mapStatus(['fundamentals_analyst']) },
+    { name: '因果链', status: mapStatus(['causal_analyst']) },
     { name: '研究整合', status: mapStatus(['research_manager']) },
     { name: '风控评估', status: mapStatus(['aggressive_risk', 'conservative_risk', 'neutral_risk']) },
     { name: '最终决策', status: mapStatus(['portfolio_manager']) },
@@ -320,6 +330,20 @@ const formatTimelineTime = (ts: string) => {
 
 .dashboard-bottom {
   flex-shrink: 0;
+}
+
+.center-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.center-tabs :deep(.ant-tabs-content) {
+  height: 100%;
+}
+
+.center-tabs :deep(.ant-tabs-tabpane) {
+  height: 100%;
 }
 
 @media (max-width: 1200px) {

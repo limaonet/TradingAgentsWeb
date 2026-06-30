@@ -1,0 +1,12 @@
+analysis:
+  storage: redis
+
+spring:
+  data:
+    redis:
+      host: redis
+      port: 6379
+
+logging:
+  level:
+    com.tradingagents: INFO
