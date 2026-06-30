@@ -46,6 +46,8 @@ public class SentimentData {
     // 综合情感得分 (-1 到 1)
     private BigDecimal overallSentiment;
     private String sentimentLabel;      // 情感标签: 积极/中性/消极
+    /** 数据质量说明，如雪球/股吧未登录导致数据缺失 */
+    private String dataQualityNote;
     
     // 扩展字段：雪球详细数据
     private Integer xueqiuPositivePosts;    // 雪球正面帖子数

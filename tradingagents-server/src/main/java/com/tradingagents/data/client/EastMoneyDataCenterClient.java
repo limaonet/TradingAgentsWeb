@@ -43,7 +43,7 @@ public class EastMoneyDataCenterClient {
         Mono<JsonNode> mainFin = fetchReport("RPT_F10_FINANCE_MAINFINADATA",
                 "SECURITY_CODE,REPORT_DATE,ROEJQ,ZZCJLL,XSMLL,XSJLL,LD,SD,ZCFZL", filter);
         Mono<JsonNode> income = fetchReport("RPT_DMSK_FN_INCOME",
-                "SECURITY_CODE,REPORT_DATE,TOTAL_OPERATE_INCOME,PARENT_NETPROFIT", filter, 2);
+                "SECURITY_CODE,REPORT_DATE,TOTAL_OPERATE_INCOME,PARENT_NETPROFIT", filter, 8);
         Mono<JsonNode> cashflow = fetchReport("RPT_DMSK_FN_CASHFLOW",
                 "SECURITY_CODE,REPORT_DATE,NETCASH_OPERATE,NETCASH_INVEST,NETCASH_FINANCE", filter);
         Mono<JsonNode> quote = fetchQuote(code);
@@ -110,7 +110,7 @@ public class EastMoneyDataCenterClient {
                                                     JsonNode cashflowArr, JsonNode quote) {
         JsonNode mainFin = mainFinArr.isArray() && !mainFinArr.isEmpty() ? mainFinArr.get(0) : null;
         JsonNode income = incomeArr.isArray() && !incomeArr.isEmpty() ? incomeArr.get(0) : null;
-        JsonNode incomePrev = incomeArr.isArray() && incomeArr.size() > 1 ? incomeArr.get(1) : null;
+        JsonNode incomeYoY = findYearAgoIncome(incomeArr, income);
         JsonNode cashflow = cashflowArr.isArray() && !cashflowArr.isEmpty() ? cashflowArr.get(0) : null;
 
         String endDate = Optional.ofNullable(mainFin)
@@ -135,9 +135,9 @@ public class EastMoneyDataCenterClient {
         if (income != null) {
             BigDecimal revenue = decimal(income, "TOTAL_OPERATE_INCOME");
             BigDecimal profit = decimal(income, "PARENT_NETPROFIT");
-            if (incomePrev != null) {
-                builder.revenueGrowth(growthRate(revenue, decimal(incomePrev, "TOTAL_OPERATE_INCOME")))
-                        .profitGrowth(growthRate(profit, decimal(incomePrev, "PARENT_NETPROFIT")));
+            if (incomeYoY != null) {
+                builder.revenueGrowth(growthRate(revenue, decimal(incomeYoY, "TOTAL_OPERATE_INCOME")))
+                        .profitGrowth(growthRate(profit, decimal(incomeYoY, "PARENT_NETPROFIT")));
             }
         }
 
@@ -168,6 +168,43 @@ public class EastMoneyDataCenterClient {
     private BigDecimal toWanYuan(BigDecimal yuan) {
         if (yuan == null) return null;
         return yuan.divide(BigDecimal.valueOf(10000), 2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 匹配去年同期报告（同比），避免相邻季度被误算为环比。
+     */
+    private JsonNode findYearAgoIncome(JsonNode incomeArr, JsonNode current) {
+        if (incomeArr == null || !incomeArr.isArray() || current == null) {
+            return null;
+        }
+        String currentDate = current.path("REPORT_DATE").asText("");
+        if (currentDate.isBlank() || currentDate.length() < 10) {
+            return incomeArr.size() > 1 ? incomeArr.get(1) : null;
+        }
+        String targetDate = shiftReportDateOneYear(currentDate);
+        for (JsonNode row : incomeArr) {
+            if (targetDate.equals(row.path("REPORT_DATE").asText(""))) {
+                return row;
+            }
+        }
+        String targetMonthDay = currentDate.substring(5);
+        for (JsonNode row : incomeArr) {
+            String rowDate = row.path("REPORT_DATE").asText("");
+            if (rowDate.length() >= 10 && rowDate.substring(5).equals(targetMonthDay)
+                    && rowDate.compareTo(currentDate) < 0) {
+                return row;
+            }
+        }
+        return incomeArr.size() > 1 ? incomeArr.get(1) : null;
+    }
+
+    private String shiftReportDateOneYear(String reportDate) {
+        try {
+            int year = Integer.parseInt(reportDate.substring(0, 4));
+            return (year - 1) + reportDate.substring(4);
+        } catch (Exception e) {
+            return reportDate;
+        }
     }
 
     private BigDecimal growthRate(BigDecimal current, BigDecimal previous) {

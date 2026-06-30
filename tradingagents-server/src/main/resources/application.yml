@@ -37,6 +37,11 @@ analysis:
     - news
     - fundamentals
 
+# API 安全（可选）：设置 API_KEY 后需在请求头携带 X-API-Key
+security:
+  api-key: ${API_KEY:}
+  rate-limit-per-minute: ${API_RATE_LIMIT_PER_MINUTE:30}
+
 # LLM Configuration - OpenRouter (国产模型)
 llm:
   provider: openrouter

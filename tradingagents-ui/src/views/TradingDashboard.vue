@@ -86,29 +86,49 @@ const onViewFullDecision = () => {
 const statusToCard = (status: string): 'idle' | 'running' | 'completed' | 'error' =>
   status === 'running' || status === 'completed' || status === 'error' ? status : 'idle'
 
-const confidenceByStatus = (status: string) => {
-  if (status === 'completed') return 85
+const confidenceByStatus = (status: string, content?: string, graphConfidence?: number) => {
+  if (graphConfidence != null && graphConfidence > 0) return graphConfidence
+  if (content) {
+    const match = content.match(/(\d{1,3})\s*%/)
+    if (match) return Math.min(100, Number(match[1]))
+  }
+  if (status === 'completed') return 70
   if (status === 'running') return 45
   return 0
 }
 
+const avgGraphConfidence = (nodes?: { confidence?: number }[]) => {
+  const values = (nodes || [])
+    .map((n) => n.confidence)
+    .filter((c): c is number => c != null)
+    .map((c) => (c <= 1 ? c * 100 : c))
+  if (!values.length) return undefined
+  return Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+}
+
 const analysts = computed(() => {
-  const ids = ['market_analyst', 'sentiment_analyst', 'fundamentals_analyst'] as const
+  const ids = ['market_analyst', 'sentiment_analyst', 'fundamentals_analyst', 'causal_analyst'] as const
+  const causalConf = avgGraphConfidence(store.causalGraph?.nodes)
   return ids.map((id) => {
     const node = store.nodes[id]
     const status = statusToCard(node?.status || 'idle')
     const hasContent = Boolean(node?.content)
+    const confidence = id === 'causal_analyst'
+      ? confidenceByStatus(status, node?.content, causalConf)
+      : confidenceByStatus(status, node?.content)
     return {
       id,
       name: node?.name || id,
       role: node?.role || '',
       avatar: id.replace('_analyst', ''),
       status,
-      confidence: hasContent ? confidenceByStatus(status) : 0,
+      confidence: hasContent || (id === 'causal_analyst' && (store.causalGraph?.nodes?.length || 0) > 0)
+        ? confidence
+        : 0,
       insights: hasContent ? [{ label: '报告已生成', type: 'bull' as const }] : [],
       metrics: [
         { label: '状态', value: status === 'completed' ? '完成' : status === 'running' ? '进行中' : '待执行', trend: status === 'completed' ? 'up' as const : status === 'error' ? 'down' as const : 'neutral' as const },
-        { label: '字数', value: String(node?.content?.length || 0), trend: (node?.content?.length || 0) > 0 ? 'up' as const : 'neutral' as const },
+        { label: id === 'causal_analyst' ? '节点' : '字数', value: id === 'causal_analyst' ? String(store.causalGraph?.nodes?.length || 0) : String(node?.content?.length || 0), trend: (id === 'causal_analyst' ? (store.causalGraph?.nodes?.length || 0) : (node?.content?.length || 0)) > 0 ? 'up' as const : 'neutral' as const },
       ],
       progress: status === 'completed' ? 100 : status === 'running' ? 60 : 0,
     }
@@ -159,9 +179,12 @@ const debateStatus = computed<'idle' | 'running' | 'completed'>(() => {
 const finalDecision = computed(() => {
   const decision = store.nodes.portfolio_manager?.content || store.reportsCache.finalTradeDecision || ''
   const hasDecision = Boolean(decision)
+  const confMatch = decision.match(/(\d{1,3})\s*%/)
+  const parsedConfidence = confMatch ? Math.min(100, Number(confMatch[1])) : undefined
+  const causalConf = avgGraphConfidence(store.causalGraph?.nodes)
   return {
     conclusion: hasDecision ? '最终决策已生成' : (store.status === 'running' ? '决策生成中' : '待生成'),
-    confidence: hasDecision ? 80 : 0,
+    confidence: hasDecision ? (parsedConfidence ?? causalConf ?? 65) : 0,
     actions: [
       { label: '分析状态', value: store.status === 'completed' ? '完成' : store.status === 'error' ? '异常' : '进行中', type: store.status === 'error' ? 'danger' as const : 'primary' as const },
       { label: '报告数', value: String(Object.values(store.nodes).filter((n) => Boolean(n.content)).length), type: 'primary' as const },
@@ -213,8 +236,9 @@ const handleSearch = async (payload: string | { ticker: string; displayName?: st
     await store.hydrateFromServer(analysisId)
     startHydrationPolling(analysisId)
     message.success(`开始分析 ${displayName || ticker.trim()}`)
-  } catch (e: any) {
-    message.error('启动分析失败：' + (e.message || '网络错误'))
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '网络错误'
+    message.error('启动分析失败：' + msg)
   } finally {
     store.setAnalysisStarting(false)
   }

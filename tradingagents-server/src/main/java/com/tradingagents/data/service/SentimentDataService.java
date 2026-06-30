@@ -143,6 +143,24 @@ public class SentimentDataService {
             data.setOverallSentiment(BigDecimal.ZERO);
             data.setSentimentLabel("数据不足");
         }
+
+        annotateDataQuality(data);
+    }
+
+    private void annotateDataQuality(SentimentData data) {
+        boolean xueqiuMissing = data.getXueqiuDiscussionCount() == null
+                && data.getXueqiuHotRank() == null
+                && data.getXueqiuPositivePosts() == null;
+        boolean gubaMissing = data.getGubaDiscussionCount() == null
+                && data.getGubaHotRank() == null
+                && data.getGubaPositivePosts() == null;
+        if (xueqiuMissing && gubaMissing) {
+            data.setDataQualityNote("雪球/股吧数据未获取（通常需登录 Cookie），结论主要基于新闻舆情，置信度应下调");
+        } else if (xueqiuMissing) {
+            data.setDataQualityNote("雪球数据未获取，结论部分依赖新闻与股吧");
+        } else if (gubaMissing) {
+            data.setDataQualityNote("股吧数据未获取，结论部分依赖新闻与雪球");
+        }
     }
 
     private int nullSafe(Integer value) {

@@ -103,7 +103,8 @@ public class AnalysisService {
                             marketReport, sentimentReport, fundamentalsReport)
                             .flatMap(causalResult ->
                                     executeResearchManager(analysisId, symbol, date,
-                                            marketReport, sentimentReport, fundamentalsReport, causalResult.summary())
+                                            marketReport, sentimentReport, fundamentalsReport,
+                                            causalResult.summary(), causalResult.graph())
                                             .flatMap(investmentPlan ->
                                                     executeTrader(analysisId, symbol, date, investmentPlan)
                                                             .flatMap(tradePlan ->
@@ -117,7 +118,8 @@ public class AnalysisService {
                                                                                 });
                                                                                 return executePortfolioManager(analysisId, symbol, date,
                                                                                         marketReport, sentimentReport, fundamentalsReport,
-                                                                                        investmentPlan, tradePlan, riskViews);
+                                                                                        investmentPlan, tradePlan, riskViews,
+                                                                                        causalResult.graph());
                                                                             })
                                                             )
                                             )
@@ -159,10 +161,11 @@ public class AnalysisService {
 
     private Mono<String> executeResearchManager(String analysisId, String symbol, String date,
                                                  String marketReport, String sentimentReport,
-                                                 String fundamentalsReport, String causalReport) {
+                                                 String fundamentalsReport, String causalReport,
+                                                 com.tradingagents.data.model.CausalGraph causalGraph) {
         return Mono.fromCallable(() ->
                         researchManagerAgent.generateInvestmentPlan(analysisId, symbol, date,
-                                marketReport, sentimentReport, causalReport, fundamentalsReport))
+                                marketReport, sentimentReport, causalReport, fundamentalsReport, causalGraph))
                 .doOnSuccess(plan -> updateState(analysisId, state -> state.setResearchManagerDecision(plan)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
@@ -198,12 +201,14 @@ public class AnalysisService {
     private Mono<String> executePortfolioManager(String analysisId, String symbol, String date,
                                                   String marketReport, String sentimentReport,
                                                   String fundamentalsReport, String investmentPlan,
-                                                  String tradePlan, RiskViews riskViews) {
+                                                  String tradePlan, RiskViews riskViews,
+                                                  com.tradingagents.data.model.CausalGraph causalGraph) {
         return Mono.fromCallable(() ->
                         portfolioManagerAgent.generateFinalDecision(analysisId, symbol, date,
                                 marketReport, sentimentReport, fundamentalsReport,
                                 investmentPlan, tradePlan,
-                                riskViews.aggressive, riskViews.conservative, riskViews.neutral))
+                                riskViews.aggressive, riskViews.conservative, riskViews.neutral,
+                                causalGraph))
                 .doOnSuccess(decision -> updateState(analysisId, state -> state.setFinalTradeDecision(decision)))
                 .subscribeOn(Schedulers.boundedElastic());
     }

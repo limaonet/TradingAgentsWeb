@@ -2,6 +2,7 @@ package com.tradingagents.data;
 
 import com.tradingagents.data.client.PlaywrightSentimentClient;
 import com.tradingagents.data.model.SentimentData;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -14,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class SentimentDataServiceTest {
 
     @Test
+    @Tag("integration")
     public void testPlaywrightSentimentClient() {
         System.out.println("=== 测试 Playwright 舆情采集客户端 ===");
         
