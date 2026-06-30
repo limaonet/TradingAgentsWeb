@@ -10,15 +10,16 @@
 |---|--------|---------|------|----------|----------|----------------|
 | 1 | 市场分析师 | `MarketAnalystAgent` | 快速模型 `quickThinkingModel` | 标的、日期；`StockDataService` 拉行情与技术指标 | 技术分析报告（Markdown） | `market_analyst` → `market_report` |
 | 2 | 情绪分析师 | `SentimentAnalystAgent` | 快速模型 | 标的、日期；`SentimentDataService` 拉舆情/社区等 | 情绪与舆情分析报告 | `sentiment_analyst` → `sentiment_report` |
-| 3 | 基本面分析师 | `FundamentalsAnalystAgent` | 快速模型 | 标的、日期；财务与基本面数据 | 基本面分析报告 | `fundamentals_analyst` → `fundamentals_report` |
-| 4 | 研究经理 | `ResearchManagerAgent` | 深度模型 `deepThinkingModel` | 上述三份报告（当前编排里「新闻」参数传 `null`，由情绪报告覆盖舆情） | **投资计划** `investment_plan` | `research_manager` |
-| 5 | 交易员 | `TraderAgent` | 深度模型 | 投资计划全文 | **交易计划** `trader_plan`（可执行层面的方案） | `trader` |
-| 6a | 激进派风控 | `RiskManagementAgents#aggressiveAnalysis` | 深度模型；内部 `AggressiveDebater` | 市场/情绪/基本面报告 + 交易计划 | 激进立场风险论述 | `debate` · speaker `aggressive` |
-| 6b | 保守派风控 | `RiskManagementAgents#conservativeAnalysis` | 深度模型；`ConservativeDebater` | 同上 | 保守立场风险论述 | `debate` · speaker `conservative` |
-| 6c | 中立派风控 | `RiskManagementAgents#neutralAnalysis` | 深度模型；`NeutralDebater` | 同上 + **激进 + 保守** 两段文字 | 折中后的风险综合意见 | `debate` · speaker `neutral` |
-| 7 | 组合经理 | `PortfolioManagerAgent` | 深度模型；`PortfolioManager` 接口 | 三份分析师报告 + 投资计划 + 交易计划 + **三份风控观点** | **最终交易决策**（并触发 `sendComplete`） | `portfolio_manager` · `complete` |
+| 3 | 基本面分析师 | `FundamentalsAnalystAgent` | 快速模型 | 标的、日期；东财数据中心真实财务数据 | 基本面分析报告 | `fundamentals_analyst` → `fundamentals_report` |
+| 4 | 因果分析师 | `CausalAnalystAgent` | 快速模型 | 三份分析师报告 + 新浪/东财真实新闻 | 因果链图谱 JSON + 摘要 | `causal_analyst` → `causal_report` / `causal_graph` |
+| 5 | 研究经理 | `ResearchManagerAgent` | 深度模型 `deepThinkingModel` | 三份报告 + **因果链摘要** | **投资计划** `investment_plan` | `research_manager` |
+| 6 | 交易员 | `TraderAgent` | 深度模型 | 投资计划全文 | **交易计划** `trader_plan` | `trader` |
+| 7a | 激进派风控 | `RiskManagementAgents#aggressiveAnalysis` | 深度模型 | 三份报告 + 交易计划 | 激进立场风险论述 | `debate` · speaker `aggressive` |
+| 7b | 保守派风控 | `RiskManagementAgents#conservativeAnalysis` | 深度模型 | 同上 | 保守立场风险论述 | `debate` · speaker `conservative` |
+| 7c | 中立派风控 | `RiskManagementAgents#neutralAnalysis` | 深度模型 | 同上 + 激进/保守观点 | 折中风险综合意见 | `debate` · speaker `neutral` |
+| 8 | 组合经理 | `PortfolioManagerAgent` | 深度模型 | 全部报告 + 计划 + 风控观点 | **最终交易决策** | `portfolio_manager` · `complete` |
 
-**并行关系**：表 1–3 同时跑；表 6a 与 6b 同时跑，二者结束后才跑 6c。
+**并行关系**：表 1–3 同时跑；Phase 1 完成后串行执行表 4；表 7a 与 7b 同时跑，结束后执行 7c。
 
 ---
 
@@ -29,8 +30,9 @@
 | 用户 & 前端 | 用户 | 输入股票代码/名称，可选日期，点击「开始分析」。 |
 | 用户 & 前端 | Vue 前端 | 调用 `POST /api/analysis/start`；用返回的 `analysisId` 建立 STOMP 订阅，实时更新进度与报告。 |
 | 入口 | `AnalysisController` / `AnalysisService` | 接收请求、解析 ticker 为统一标的代码、创建任务、异步启动流水线。 |
-| Phase 1 | 市场 / 情绪 / 基本面分析师（**并行**） | 分别产出技术面、舆情情绪、财务与估值维度的分析报告。 |
-| Phase 2 | 研究经理 | 综合三份报告，形成**投资计划**（策略与逻辑）。 |
+| Phase 1 | 市场 / 情绪 / 基本面分析师（**并行**） | 分别产出技术面、舆情、财务分析报告。 |
+| Phase 1.5 | 因果分析师 | 采集真实新闻，结合三份报告构建**因果链图谱**（事件→因子→指标→结果）。 |
+| Phase 2 | 研究经理 | 综合三份报告与因果链摘要，形成**投资计划**。 |
 | Phase 3 | 交易员 | 在投资计划基础上细化**交易计划**（价位、仓位、止盈止损等可执行要素）。 |
 | Phase 4 | 激进派 & 保守派风控（**并行**）→ 中立派 | 从风险收益不同立场评估交易计划；中立派在双方结论之上做**折中与综合**。 |
 | Phase 5 | 组合经理 | 汇总全部材料，输出**最终交易决策**（可对外展示的综合结论）。 |
