@@ -9,7 +9,9 @@ import com.tradingagents.data.model.CausalGraph;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 分析状态
@@ -84,6 +86,17 @@ public class AnalysisState {
     private String fundamentalsReport;
     private String causalReport;
     private CausalGraph causalGraph;
+
+    /** 是否开启因果链准实时追踪 */
+    @Builder.Default
+    private Boolean causalLiveEnabled = false;
+
+    /** 上次因果图刷新时间 */
+    private LocalDateTime causalLastRefreshedAt;
+
+    /** 已纳入因果链的事件指纹，用于增量检测 */
+    @Builder.Default
+    private Set<String> causalSeenEventKeys = new HashSet<>();
     
     // ============ 研究辩论 ============
     

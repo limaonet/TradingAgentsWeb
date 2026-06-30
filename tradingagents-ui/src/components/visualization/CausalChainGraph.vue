@@ -1,7 +1,19 @@
 <template>
   <div class="causal-chain-panel">
     <div class="panel-header">
-      <div class="title">因果链分析</div>
+      <div class="title-row">
+        <div class="title">因果链分析</div>
+        <div v-if="hasGraph" class="live-controls">
+          <a-switch
+            :checked="store.causalLiveEnabled"
+            :loading="liveToggling"
+            :disabled="!store.analysisId"
+            checked-children="实时"
+            un-checked-children="快照"
+            @change="onLiveToggle"
+          />
+        </div>
+      </div>
       <div class="actions">
         <a-button size="small" :type="traceMode === 'up' ? 'primary' : 'default'" @click="setTraceMode('up')">
           向上追因
@@ -12,6 +24,8 @@
         <a-button size="small" @click="resetTrace">重置</a-button>
       </div>
     </div>
+
+    <div v-if="liveStatusText" class="live-status">{{ liveStatusText }}</div>
 
     <div class="legend">
       <span class="legend-item"><i class="dot event" />事件</span>
@@ -51,21 +65,81 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Graph } from '@antv/g6'
+import { message } from 'ant-design-vue'
 import { useAnalysisStore, type CausalGraphData, type CausalEdgeData } from '@/stores/analysisStore'
+import { setCausalLive, getCausalLive } from '@/api/analysisApi'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 type GraphNodeDatum = { id?: string; data?: { label?: string; type?: string; dimmed?: boolean } }
 type GraphEdgeDatum = { id?: string; source?: string; target?: string; data?: { dimmed?: boolean; edgeType?: string; relation?: string } }
 
 const store = useAnalysisStore()
+const { connect, isConnected } = useWebSocket()
 const graphContainer = ref<HTMLElement | null>(null)
 let graph: Graph | null = null
 const selectedNodeId = ref<string | null>(null)
 const selectedEdgeId = ref<string | null>(null)
 const traceMode = ref<'none' | 'up' | 'down'>('none')
+const liveToggling = ref(false)
 
 const graphData = computed(() => store.causalGraph)
 const summary = computed(() => graphData.value?.summary || '')
 const hasGraph = computed(() => (graphData.value?.nodes?.length || 0) > 0)
+
+const liveStatusText = computed(() => {
+  if (!hasGraph.value) return ''
+  const parts: string[] = []
+  if (store.causalLiveEnabled) {
+    parts.push('实时追踪中（约每 1 分钟轮询新闻/公告）')
+  }
+  if (store.causalLastRefreshedAt) {
+    parts.push(`上次刷新: ${formatTime(store.causalLastRefreshedAt)}`)
+  }
+  if (store.causalLiveMessage) {
+    parts.push(store.causalLiveMessage)
+  }
+  return parts.join(' · ')
+})
+
+function formatTime(ts: string | null) {
+  if (!ts) return ''
+  try {
+    return new Date(ts).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  } catch {
+    return ts
+  }
+}
+
+async function onLiveToggle(checked: boolean) {
+  if (!store.analysisId) {
+    message.warning('请先启动分析')
+    return
+  }
+  liveToggling.value = true
+  try {
+    if (checked && !isConnected.value) {
+      connect(store.analysisId)
+    }
+    const resp = await setCausalLive(store.analysisId, checked)
+    store.setCausalLiveState(resp.causalLiveEnabled, store.causalLastRefreshedAt, resp.message)
+    message.success(resp.message)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '操作失败'
+    message.error(msg)
+  } finally {
+    liveToggling.value = false
+  }
+}
+
+async function syncLiveState() {
+  if (!store.analysisId) return
+  try {
+    const resp = await getCausalLive(store.analysisId)
+    store.setCausalLiveState(resp.causalLiveEnabled, resp.causalLastRefreshedAt ?? null)
+  } catch {
+    // ignore
+  }
+}
 
 const selectedNode = computed(() =>
   graphData.value?.nodes?.find((n) => n.id === selectedNodeId.value) || null
@@ -281,7 +355,10 @@ watch(
   { deep: true }
 )
 
-onMounted(() => nextTick(() => renderGraph()))
+onMounted(() => {
+  nextTick(() => renderGraph())
+  syncLiveState()
+})
 onUnmounted(() => {
   if (graph) {
     graph.destroy()
@@ -305,7 +382,28 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color-split);
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.live-controls {
+  display: flex;
+  align-items: center;
+}
+
+.live-status {
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--color-primary);
+  background: rgba(22, 119, 255, 0.06);
   border-bottom: 1px solid var(--border-color-split);
 }
 

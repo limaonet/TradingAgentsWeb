@@ -21,7 +21,7 @@ export interface TimelineMessage {
   timestamp: string
   agent: string
   agentName: string
-  type: 'progress' | 'report' | 'agent_status' | 'debate' | 'complete' | 'error' | 'causal_graph'
+  type: 'progress' | 'report' | 'agent_status' | 'debate' | 'complete' | 'error' | 'causal_graph' | 'causal_graph_update' | 'causal_live_status'
   status: string
   content: string
   debateType?: string
@@ -147,6 +147,9 @@ export const useAnalysisStore = defineStore('analysis', () => {
   const syncedState = ref<any>(null)
   const reportsCache = ref<Record<string, string>>({})
   const causalGraph = ref<CausalGraphData | null>(null)
+  const causalLiveEnabled = ref(false)
+  const causalLastRefreshedAt = ref<string | null>(null)
+  const causalLiveMessage = ref('')
 
   // 计时器
   let timerHandle: ReturnType<typeof setInterval> | null = null
@@ -211,6 +214,9 @@ export const useAnalysisStore = defineStore('analysis', () => {
     syncedState.value = null
     reportsCache.value = {}
     causalGraph.value = null
+    causalLiveEnabled.value = false
+    causalLastRefreshedAt.value = null
+    causalLiveMessage.value = ''
     startTime.value = Date.now()
     elapsedSeconds.value = 0
 
@@ -308,6 +314,30 @@ export const useAnalysisStore = defineStore('analysis', () => {
         if (nodes.value.causal_analyst) {
           nodes.value.causal_analyst.status = 'completed'
           nodes.value.causal_analyst.content = msg.content || causalGraph.value?.summary || ''
+        }
+        break
+
+      case 'causal_graph_update':
+        if (msg.graph) {
+          causalGraph.value = msg.graph as CausalGraphData
+        }
+        if (msg.refreshedAt) {
+          causalLastRefreshedAt.value = msg.refreshedAt
+        }
+        if (nodes.value.causal_analyst) {
+          const count = msg.newEventCount ?? 0
+          nodes.value.causal_analyst.content = msg.content || causalGraph.value?.summary || ''
+          causalLiveMessage.value = count > 0 ? `已合并 ${count} 条新事件` : '因果图已更新'
+        }
+        break
+
+      case 'causal_live_status':
+        causalLiveEnabled.value = Boolean(msg.live)
+        if (msg.content) {
+          causalLiveMessage.value = msg.content
+        }
+        if (nodeId && nodes.value[nodeId]) {
+          nodes.value[nodeId].status = msg.live ? 'running' : 'completed'
         }
         break
 
@@ -414,6 +444,12 @@ export const useAnalysisStore = defineStore('analysis', () => {
       if (stateResp?.causalGraph) {
         causalGraph.value = stateResp.causalGraph as CausalGraphData
       }
+      if (stateResp?.causalLiveEnabled != null) {
+        causalLiveEnabled.value = Boolean(stateResp.causalLiveEnabled)
+      }
+      if (stateResp?.causalLastRefreshedAt) {
+        causalLastRefreshedAt.value = stateResp.causalLastRefreshedAt
+      }
 
       if (stateResp?.ticker) ticker.value = stateResp.ticker
       if (stateResp?.date) date.value = stateResp.date
@@ -448,17 +484,28 @@ export const useAnalysisStore = defineStore('analysis', () => {
     if (timerHandle) { clearInterval(timerHandle); timerHandle = null }
   }
 
+  function setCausalLiveState(enabled: boolean, refreshedAt?: string | null, message?: string) {
+    causalLiveEnabled.value = enabled
+    if (refreshedAt !== undefined) {
+      causalLastRefreshedAt.value = refreshedAt
+    }
+    if (message) {
+      causalLiveMessage.value = message
+    }
+  }
+
   return {
     // state
     analysisId, status, progress, currentAgent, selectedNodeId,
     ticker, date, startTime, elapsedSeconds,
     nodes, timelineMessages, syncedState, reportsCache, causalGraph,
+    causalLiveEnabled, causalLastRefreshedAt, causalLiveMessage,
     // computed
     selectedNode, nodeList, completedCount, totalNodes, isRunning, isStarting, analysisBusy,
     reportViewerOpen, reportViewerTitle, reportViewerBody,
     // methods
     getAgentMeta, resolveNodeId, startAnalysis, handleMessage, selectNode, reset, hydrateFromServer,
-    setAnalysisStarting, openReportViewer, closeReportViewer,
+    setAnalysisStarting, openReportViewer, closeReportViewer, setCausalLiveState,
     // constants
     AGENT_META,
   }

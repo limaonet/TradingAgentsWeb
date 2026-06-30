@@ -33,7 +33,7 @@ jobs:
       - name: Unit tests
         run: >-
           mvn -B test
-          -Dtest=CausalGraphParserTest,InMemoryAnalysisStateStoreTest,EastMoneyDataCenterClientTest
+          -Dtest=CausalGraphParserTest,InMemoryAnalysisStateStoreTest,EastMoneyDataCenterClientTest,CausalEventTrackerTest
 
   frontend:
     name: Frontend (Vue)

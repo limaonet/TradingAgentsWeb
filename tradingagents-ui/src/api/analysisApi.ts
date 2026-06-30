@@ -53,4 +53,22 @@ export const searchSymbols = async (keyword: string, limit = 10): Promise<Symbol
   return response.data || []
 }
 
+export const setCausalLive = async (analysisId: string, enabled: boolean): Promise<{
+  analysisId: string
+  causalLiveEnabled: boolean
+  message: string
+}> => {
+  const response = await apiClient.post(`/analysis/${analysisId}/causal/live`, { enabled })
+  return response.data
+}
+
+export const getCausalLive = async (analysisId: string): Promise<{
+  analysisId: string
+  causalLiveEnabled: boolean
+  causalLastRefreshedAt?: string
+}> => {
+  const response = await apiClient.get(`/analysis/${analysisId}/causal/live`)
+  return response.data
+}
+
 export default apiClient

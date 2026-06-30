@@ -42,6 +42,14 @@ security:
   api-key: ${API_KEY:}
   rate-limit-per-minute: ${API_RATE_LIMIT_PER_MINUTE:30}
 
+# 因果链准实时追踪（轮询新闻/公告，增量更新图谱）
+causal:
+  live:
+    enabled: ${CAUSAL_LIVE_ENABLED:true}
+    poll-interval-ms: ${CAUSAL_LIVE_POLL_MS:60000}
+    min-refresh-interval-ms: ${CAUSAL_LIVE_MIN_REFRESH_MS:120000}
+    max-session-hours: ${CAUSAL_LIVE_MAX_HOURS:2}
+
 # LLM Configuration - OpenRouter (国产模型)
 llm:
   provider: openrouter

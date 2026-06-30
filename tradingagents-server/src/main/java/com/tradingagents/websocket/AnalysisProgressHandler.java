@@ -65,6 +65,30 @@ public class AnalysisProgressHandler {
     }
 
     /**
+     * 推送因果图增量更新（准实时模式）
+     */
+    public void sendCausalGraphUpdate(String analysisId, CausalGraph graph, int newEventCount, LocalDateTime refreshedAt) {
+        Map<String, Object> payload = createPayload("causal_graph_update", null, "completed",
+                graph.getSummary(), null);
+        payload.put("graph", graph);
+        payload.put("newEventCount", newEventCount);
+        payload.put("refreshedAt", refreshedAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+        messagingTemplate.convertAndSend("/topic/analysis/" + analysisId, payload);
+        log.info("【WS】已推送因果图增量 analysisId={} newEvents={} nodes={}",
+                analysisId, newEventCount, graph.getNodes() != null ? graph.getNodes().size() : 0);
+    }
+
+    /**
+     * 推送实时追踪状态（轮询中/超时等）
+     */
+    public void sendCausalLiveStatus(String analysisId, boolean live, String message) {
+        Map<String, Object> payload = createPayload("causal_live_status", "causal_analyst",
+                live ? "running" : "completed", message, null);
+        payload.put("live", live);
+        messagingTemplate.convertAndSend("/topic/analysis/" + analysisId, payload);
+    }
+
+    /**
      * 发送错误消息
      */
     public void sendError(String analysisId, String agent, String errorMessage) {

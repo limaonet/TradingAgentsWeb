@@ -37,6 +37,7 @@ public class AnalysisService {
     private final AnalysisProgressHandler progressHandler;
     private final StockSymbolResolverClient stockSymbolResolverClient;
     private final AnalysisStateStore analysisStateStore;
+    private final CausalLiveService causalLiveService;
 
     /**
      * 启动分析
@@ -156,6 +157,7 @@ public class AnalysisService {
                     state.setCausalReport(result.summary());
                     state.setCausalGraph(result.graph());
                 }))
+                .doOnSuccess(result -> causalLiveService.seedSeenEvents(analysisId, symbol))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -223,6 +225,18 @@ public class AnalysisService {
 
     public List<SymbolSearchItem> searchSymbols(String keyword, int limit) {
         return stockSymbolResolverClient.searchCandidates(keyword, limit).block();
+    }
+
+    public boolean setCausalLive(String analysisId, boolean enabled) {
+        if (enabled) {
+            return causalLiveService.enableLive(analysisId);
+        }
+        causalLiveService.disableLive(analysisId);
+        return false;
+    }
+
+    public boolean isCausalLive(String analysisId) {
+        return causalLiveService.isLiveEnabled(analysisId);
     }
 
     private record RiskViews(String aggressive, String conservative, String neutral) {}

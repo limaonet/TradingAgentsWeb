@@ -61,6 +61,51 @@ public class CausalAnalysisService {
         return causalGraphValidator.validateAndClean(graph, symbol);
     }
 
+    /**
+     * 增量更新：在已有图谱上合并新事件，避免全量重建。
+     */
+    public CausalGraph incrementalUpdate(CausalGraph existing, List<StockEvent> newEvents,
+                                         String symbol, String date,
+                                         String marketReport, String sentimentReport,
+                                         String fundamentalsReport) {
+        if (existing == null || newEvents == null || newEvents.isEmpty()) {
+            return existing;
+        }
+
+        String existingJson;
+        try {
+            existingJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(existing);
+        } catch (Exception e) {
+            existingJson = "{}";
+        }
+
+        String prompt = """
+                标的 %s 日期 %s。请在**保留原有节点与边**的基础上，将下列**新增事件**并入因果图，输出完整 JSON。
+                
+                【当前因果图】
+                %s
+                
+                【新增事件】
+                %s
+                
+                要求：
+                1. 输出完整 nodes + edges（含原有 + 新增），新节点 id 不与已有冲突
+                2. 新 event 节点必须来自新增事件列表，sourceRef 填 URL
+                3. 将新事件连入既有 factor/indicator/outcome 链，必要时补充中间节点
+                4. 更新 summary，注明本次新增了哪些事件
+                5. 至少为每个新事件添加 1 条边；若与现有结论冲突，添加 contradicts 边
+                """.formatted(symbol, date, existingJson, serializeEvents(newEvents));
+
+        GraphPatcher patcher = AiServices.create(GraphPatcher.class, quickThinkingModel);
+        String raw = patcher.patch(prompt);
+        CausalGraph merged = causalGraphParser.parse(raw);
+        if (merged.getNodes() == null || merged.getNodes().isEmpty()) {
+            log.warn("【因果增量】LLM 返回空图，保留原图 标的={}", symbol);
+            return existing;
+        }
+        return causalGraphValidator.validateAndClean(merged, symbol);
+    }
+
     private String serializeEvents(List<StockEvent> events) {
         try {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(events);
@@ -123,5 +168,11 @@ public class CausalAnalysisService {
         @SystemMessage("你是因果图质检员，简要指出遗漏或逻辑漏洞，不超过80字。")
         @UserMessage("{{it}}")
         String review(String prompt);
+    }
+
+    interface GraphPatcher {
+        @SystemMessage("你是因果图增量更新专家。只输出完整 JSON，不要其他文字。")
+        @UserMessage("{{it}}")
+        String patch(String prompt);
     }
 }

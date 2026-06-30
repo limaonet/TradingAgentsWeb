@@ -79,4 +79,39 @@ public class AnalysisController {
             @RequestParam(value = "limit", defaultValue = "10") int limit) {
         return ResponseEntity.ok(analysisService.searchSymbols(keyword, limit));
     }
+
+    /**
+     * 开启/关闭因果链准实时追踪
+     */
+    @PostMapping("/{analysisId}/causal/live")
+    public ResponseEntity<Map<String, Object>> setCausalLive(
+            @PathVariable String analysisId,
+            @RequestBody Map<String, Boolean> body) {
+        boolean enabled = Boolean.TRUE.equals(body.get("enabled"));
+        try {
+            boolean live = analysisService.setCausalLive(analysisId, enabled);
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("analysisId", analysisId);
+            resp.put("causalLiveEnabled", live);
+            resp.put("message", live ? "因果链实时追踪已开启" : "因果链实时追踪已关闭");
+            return ResponseEntity.ok(resp);
+        } catch (IllegalStateException e) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(err);
+        }
+    }
+
+    @GetMapping("/{analysisId}/causal/live")
+    public ResponseEntity<Map<String, Object>> getCausalLive(@PathVariable String analysisId) {
+        AnalysisState state = analysisService.getAnalysisState(analysisId);
+        if (state == null) {
+            return ResponseEntity.notFound().build();
+        }
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("analysisId", analysisId);
+        resp.put("causalLiveEnabled", Boolean.TRUE.equals(state.getCausalLiveEnabled()));
+        resp.put("causalLastRefreshedAt", state.getCausalLastRefreshedAt());
+        return ResponseEntity.ok(resp);
+    }
 }
