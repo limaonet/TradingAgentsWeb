@@ -211,7 +211,12 @@ public class AnalysisService {
                                 investmentPlan, tradePlan,
                                 riskViews.aggressive, riskViews.conservative, riskViews.neutral,
                                 causalGraph))
-                .doOnSuccess(decision -> updateState(analysisId, state -> state.setFinalTradeDecision(decision)))
+                .doOnSuccess(decision -> updateState(analysisId, state -> {
+                    state.setFinalTradeDecision(decision);
+                    state.setStatus("completed");
+                    state.setProgress(100);
+                    state.setEndTime(LocalDateTime.now());
+                }))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 

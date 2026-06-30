@@ -56,7 +56,7 @@ public class EventCollectionService {
         events.sort(Comparator.comparing(StockEvent::getPublishedAt,
                 Comparator.nullsLast(Comparator.reverseOrder())));
 
-        log.info("【事件采集】标的={} ({}) 结构化事件 {} 条", stockCode, stockName, events.size());
+        log.debug("【事件采集】标的={} ({}) 结构化事件 {} 条", stockCode, stockName, events.size());
         return events.stream().limit(25).collect(Collectors.toList());
     }
 

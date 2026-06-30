@@ -112,7 +112,7 @@ function formatTime(ts: string | null) {
 
 async function onLiveToggle(checked: boolean) {
   if (!store.analysisId) {
-    message.warning('请先启动分析')
+    message.warning('请先完成分析或刷新页面后再开启实时追踪')
     return
   }
   liveToggling.value = true

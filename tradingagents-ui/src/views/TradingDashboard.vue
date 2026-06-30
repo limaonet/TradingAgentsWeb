@@ -5,6 +5,14 @@
 
     <!-- 主内容区 -->
     <main class="dashboard-main">
+      <a-alert
+        v-if="store.hydrateError"
+        type="warning"
+        show-icon
+        closable
+        class="hydrate-alert"
+        :message="store.hydrateError"
+      />
       <!-- 三栏布局 -->
       <div class="dashboard-grid">
         <!-- 左侧：分析师团队 -->
@@ -254,7 +262,7 @@ const startHydrationPolling = (analysisId: string) => {
         hydrateTimer = null
       }
     }
-  }, 2500)
+  }, 5000)
 }
 
 // 处理分析师选择
@@ -276,9 +284,15 @@ onMounted(() => {
   }
   const cachedAnalysisId = localStorage.getItem('tradingagents_last_analysis_id')
   if (cachedAnalysisId) {
-    store.hydrateFromServer(cachedAnalysisId).then(() => {
-      if (store.status === 'running') {
+    store.hydrateFromServer(cachedAnalysisId).then((ok) => {
+      if (!ok) {
+        message.warning(store.hydrateError || '无法恢复历史分析，请重新搜索股票开始分析')
+        return
+      }
+      if (store.status === 'running' || store.causalLiveEnabled) {
         connect(cachedAnalysisId)
+      }
+      if (store.status === 'running') {
         startHydrationPolling(cachedAnalysisId)
       }
     })
@@ -325,6 +339,11 @@ const formatTimelineTime = (ts: string) => {
   gap: 16px;
   overflow: hidden;
   min-height: 0;
+}
+
+.hydrate-alert {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
 }
 
 .dashboard-grid {

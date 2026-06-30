@@ -51,15 +51,27 @@ public class ApiSecurityFilter extends OncePerRequestFilter {
             }
         }
 
-        String clientKey = resolveClientKey(request);
-        if (!allowRequest(clientKey)) {
-            response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-            response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("{\"error\":\"Too many requests, please retry later\"}");
-            return;
+        if (shouldRateLimit(request)) {
+            String clientKey = resolveClientKey(request);
+            if (!allowRequest(clientKey)) {
+                response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("{\"error\":\"Too many requests, please retry later\"}");
+                return;
+            }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /** 仅对会触发 LLM/重计算的 POST 接口限流，GET 轮询状态不限流 */
+    private boolean shouldRateLimit(HttpServletRequest request) {
+        if (!"POST".equalsIgnoreCase(request.getMethod())) {
+            return false;
+        }
+        String path = request.getRequestURI();
+        return path.startsWith("/api/analysis/start")
+                || path.matches(".*/api/analysis/[^/]+/causal/live");
     }
 
     private String resolveClientKey(HttpServletRequest request) {

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getAnalysisReports, getAnalysisState } from '@/api/analysisApi'
+import { getAnalysisReports, getAnalysisState, AnalysisNotFoundError } from '@/api/analysisApi'
 
 export type NodeStatus = 'idle' | 'pending' | 'running' | 'completed' | 'error'
 export type AnalysisStatus = 'idle' | 'running' | 'completed' | 'error'
@@ -150,6 +150,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
   const causalLiveEnabled = ref(false)
   const causalLastRefreshedAt = ref<string | null>(null)
   const causalLiveMessage = ref('')
+  const hydrateError = ref<string | null>(null)
 
   // 计时器
   let timerHandle: ReturnType<typeof setInterval> | null = null
@@ -419,13 +420,43 @@ export const useAnalysisStore = defineStore('analysis', () => {
     }
   }
 
-  async function hydrateFromServer(id: string) {
-    if (!id) return
+  function isHydrateRateLimited(err: unknown): boolean {
+    if (typeof err !== 'object' || err === null || !('response' in err)) {
+      return false
+    }
+    return (err as { response?: { status?: number } }).response?.status === 429
+  }
+
+  async function hydrateFromServer(id: string): Promise<boolean> {
+    if (!id) return false
+    analysisId.value = id
+    hydrateError.value = null
     try {
-      const [stateResp, reportsResp] = await Promise.all([
-        getAnalysisState(id),
-        getAnalysisReports(id),
-      ])
+      let stateResp: Awaited<ReturnType<typeof getAnalysisState>> | null = null
+      let reportsResp: Record<string, string> = {}
+
+      try {
+        stateResp = await getAnalysisState(id)
+      } catch (e) {
+        if (e instanceof AnalysisNotFoundError) {
+          hydrateError.value = '分析任务已过期（后端重启后内存数据会清空），请重新点击「开始分析」'
+          localStorage.removeItem('tradingagents_last_analysis_id')
+          status.value = 'idle'
+          progress.value = 0
+          causalGraph.value = null
+          return false
+        }
+        throw e
+      }
+
+      try {
+        reportsResp = await getAnalysisReports(id)
+      } catch (e) {
+        if (!(e instanceof AnalysisNotFoundError)) {
+          console.warn('getAnalysisReports failed, using state fields only:', e)
+        }
+      }
+
       syncedState.value = stateResp
       reportsCache.value = reportsResp || {}
       const mergedReports = {
@@ -454,18 +485,27 @@ export const useAnalysisStore = defineStore('analysis', () => {
       if (stateResp?.ticker) ticker.value = stateResp.ticker
       if (stateResp?.date) date.value = stateResp.date
       if (stateResp?.status === 'completed' || stateResp?.status === 'error' || stateResp?.status === 'running') {
-        status.value = stateResp.status
+        status.value = stateResp.status as AnalysisStatus
       }
       if (stateResp?.finalTradeDecision || stateResp?.status === 'completed') {
         status.value = 'completed'
         progress.value = 100
+      } else if (typeof stateResp?.progress === 'number' && stateResp.progress > 0) {
+        progress.value = stateResp.progress
       }
-      if (stateResp?.status === 'completed') progress.value = 100
 
       syncNodeStatusesFromAgentStatuses(stateResp?.agentStatuses || {})
       mergeReportsToNodes(mergedReports)
+      return true
     } catch (err) {
+      if (isHydrateRateLimited(err)) {
+        hydrateError.value = '请求过于频繁，请稍候再试（已暂停自动刷新）'
+        return false
+      }
+      const msg = err instanceof Error ? err.message : '加载分析状态失败'
+      hydrateError.value = msg
       console.warn('hydrateFromServer failed:', err)
+      return false
     }
   }
 
@@ -503,7 +543,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     analysisId, status, progress, currentAgent, selectedNodeId,
     ticker, date, startTime, elapsedSeconds,
     nodes, timelineMessages, syncedState, reportsCache, causalGraph,
-    causalLiveEnabled, causalLastRefreshedAt, causalLiveMessage,
+    causalLiveEnabled, causalLastRefreshedAt, causalLiveMessage, hydrateError,
     // computed
     selectedNode, nodeList, completedCount, totalNodes, isRunning, isStarting, analysisBusy,
     reportViewerOpen, reportViewerTitle, reportViewerBody,
