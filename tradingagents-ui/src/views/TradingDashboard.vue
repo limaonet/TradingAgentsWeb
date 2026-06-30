@@ -5,6 +5,14 @@
 
     <!-- 主内容区 -->
     <main class="dashboard-main">
+      <a-alert
+        v-if="store.hydrateError"
+        type="warning"
+        show-icon
+        closable
+        class="hydrate-alert"
+        :message="store.hydrateError"
+      />
       <!-- 三栏布局 -->
       <div class="dashboard-grid">
         <!-- 左侧：分析师团队 -->
@@ -12,14 +20,21 @@
           <AnalystTeam :analysts="analysts" @select="handleAnalystSelect" />
         </div>
 
-        <!-- 中间：辩论区 -->
+        <!-- 中间：辩论区 / 因果链 -->
         <div class="grid-center">
-          <DebateArena
-            :messages="debateMessages"
-            :risks="riskAssessments"
-            :status="debateStatus"
-            @open-risk-detail="openRiskDetail"
-          />
+          <a-tabs v-model:activeKey="centerTab" class="center-tabs" destroy-inactive-tab-pane>
+            <a-tab-pane key="debate" tab="风控辩论">
+              <DebateArena
+                :messages="debateMessages"
+                :risks="riskAssessments"
+                :status="debateStatus"
+                @open-risk-detail="openRiskDetail"
+              />
+            </a-tab-pane>
+            <a-tab-pane key="causal" tab="因果链">
+              <CausalChainGraph />
+            </a-tab-pane>
+          </a-tabs>
         </div>
 
         <!-- 右侧：最终决策 -->
@@ -44,13 +59,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import SearchHeader from '@/components/topbar/SearchHeader.vue'
 import AnalystTeam from '@/components/sidebar/AnalystTeam.vue'
 import DebateArena from '@/components/debate/DebateArena.vue'
 import DecisionPanel from '@/components/decision/DecisionPanel.vue'
 import AnalysisPipeline from '@/components/timeline/AnalysisPipeline.vue'
+import CausalChainGraph from '@/components/visualization/CausalChainGraph.vue'
 import { useAnalysisStore } from '@/stores/analysisStore'
 import { startAnalysis } from '@/api/analysisApi'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -59,6 +75,7 @@ import { message } from 'ant-design-vue'
 const route = useRoute()
 const store = useAnalysisStore()
 const { connect, disconnect } = useWebSocket()
+const centerTab = ref('debate')
 let hydrateTimer: ReturnType<typeof setInterval> | null = null
 
 const openRiskDetail = (payload: { name: string; content: string }) => {
@@ -77,29 +94,49 @@ const onViewFullDecision = () => {
 const statusToCard = (status: string): 'idle' | 'running' | 'completed' | 'error' =>
   status === 'running' || status === 'completed' || status === 'error' ? status : 'idle'
 
-const confidenceByStatus = (status: string) => {
-  if (status === 'completed') return 85
+const confidenceByStatus = (status: string, content?: string, graphConfidence?: number) => {
+  if (graphConfidence != null && graphConfidence > 0) return graphConfidence
+  if (content) {
+    const match = content.match(/(\d{1,3})\s*%/)
+    if (match) return Math.min(100, Number(match[1]))
+  }
+  if (status === 'completed') return 70
   if (status === 'running') return 45
   return 0
 }
 
+const avgGraphConfidence = (nodes?: { confidence?: number }[]) => {
+  const values = (nodes || [])
+    .map((n) => n.confidence)
+    .filter((c): c is number => c != null)
+    .map((c) => (c <= 1 ? c * 100 : c))
+  if (!values.length) return undefined
+  return Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+}
+
 const analysts = computed(() => {
-  const ids = ['market_analyst', 'sentiment_analyst', 'fundamentals_analyst'] as const
+  const ids = ['market_analyst', 'sentiment_analyst', 'fundamentals_analyst', 'causal_analyst'] as const
+  const causalConf = avgGraphConfidence(store.causalGraph?.nodes)
   return ids.map((id) => {
     const node = store.nodes[id]
     const status = statusToCard(node?.status || 'idle')
     const hasContent = Boolean(node?.content)
+    const confidence = id === 'causal_analyst'
+      ? confidenceByStatus(status, node?.content, causalConf)
+      : confidenceByStatus(status, node?.content)
     return {
       id,
       name: node?.name || id,
       role: node?.role || '',
       avatar: id.replace('_analyst', ''),
       status,
-      confidence: hasContent ? confidenceByStatus(status) : 0,
+      confidence: hasContent || (id === 'causal_analyst' && (store.causalGraph?.nodes?.length || 0) > 0)
+        ? confidence
+        : 0,
       insights: hasContent ? [{ label: '报告已生成', type: 'bull' as const }] : [],
       metrics: [
         { label: '状态', value: status === 'completed' ? '完成' : status === 'running' ? '进行中' : '待执行', trend: status === 'completed' ? 'up' as const : status === 'error' ? 'down' as const : 'neutral' as const },
-        { label: '字数', value: String(node?.content?.length || 0), trend: (node?.content?.length || 0) > 0 ? 'up' as const : 'neutral' as const },
+        { label: id === 'causal_analyst' ? '节点' : '字数', value: id === 'causal_analyst' ? String(store.causalGraph?.nodes?.length || 0) : String(node?.content?.length || 0), trend: (id === 'causal_analyst' ? (store.causalGraph?.nodes?.length || 0) : (node?.content?.length || 0)) > 0 ? 'up' as const : 'neutral' as const },
       ],
       progress: status === 'completed' ? 100 : status === 'running' ? 60 : 0,
     }
@@ -150,9 +187,12 @@ const debateStatus = computed<'idle' | 'running' | 'completed'>(() => {
 const finalDecision = computed(() => {
   const decision = store.nodes.portfolio_manager?.content || store.reportsCache.finalTradeDecision || ''
   const hasDecision = Boolean(decision)
+  const confMatch = decision.match(/(\d{1,3})\s*%/)
+  const parsedConfidence = confMatch ? Math.min(100, Number(confMatch[1])) : undefined
+  const causalConf = avgGraphConfidence(store.causalGraph?.nodes)
   return {
     conclusion: hasDecision ? '最终决策已生成' : (store.status === 'running' ? '决策生成中' : '待生成'),
-    confidence: hasDecision ? 80 : 0,
+    confidence: hasDecision ? (parsedConfidence ?? causalConf ?? 65) : 0,
     actions: [
       { label: '分析状态', value: store.status === 'completed' ? '完成' : store.status === 'error' ? '异常' : '进行中', type: store.status === 'error' ? 'danger' as const : 'primary' as const },
       { label: '报告数', value: String(Object.values(store.nodes).filter((n) => Boolean(n.content)).length), type: 'primary' as const },
@@ -174,6 +214,7 @@ const pipelineStages = computed(() => {
     { name: '市场分析', status: mapStatus(['market_analyst']) },
     { name: '情绪分析', status: mapStatus(['sentiment_analyst']) },
     { name: '基本面分析', status: mapStatus(['fundamentals_analyst']) },
+    { name: '因果链', status: mapStatus(['causal_analyst']) },
     { name: '研究整合', status: mapStatus(['research_manager']) },
     { name: '风控评估', status: mapStatus(['aggressive_risk', 'conservative_risk', 'neutral_risk']) },
     { name: '最终决策', status: mapStatus(['portfolio_manager']) },
@@ -203,8 +244,9 @@ const handleSearch = async (payload: string | { ticker: string; displayName?: st
     await store.hydrateFromServer(analysisId)
     startHydrationPolling(analysisId)
     message.success(`开始分析 ${displayName || ticker.trim()}`)
-  } catch (e: any) {
-    message.error('启动分析失败：' + (e.message || '网络错误'))
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '网络错误'
+    message.error('启动分析失败：' + msg)
   } finally {
     store.setAnalysisStarting(false)
   }
@@ -220,7 +262,7 @@ const startHydrationPolling = (analysisId: string) => {
         hydrateTimer = null
       }
     }
-  }, 2500)
+  }, 5000)
 }
 
 // 处理分析师选择
@@ -242,9 +284,15 @@ onMounted(() => {
   }
   const cachedAnalysisId = localStorage.getItem('tradingagents_last_analysis_id')
   if (cachedAnalysisId) {
-    store.hydrateFromServer(cachedAnalysisId).then(() => {
-      if (store.status === 'running') {
+    store.hydrateFromServer(cachedAnalysisId).then((ok) => {
+      if (!ok) {
+        message.warning(store.hydrateError || '无法恢复历史分析，请重新搜索股票开始分析')
+        return
+      }
+      if (store.status === 'running' || store.causalLiveEnabled) {
         connect(cachedAnalysisId)
+      }
+      if (store.status === 'running') {
         startHydrationPolling(cachedAnalysisId)
       }
     })
@@ -293,6 +341,11 @@ const formatTimelineTime = (ts: string) => {
   min-height: 0;
 }
 
+.hydrate-alert {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(250px, 22vw) minmax(0, 1fr) minmax(250px, 20vw);
@@ -320,6 +373,20 @@ const formatTimelineTime = (ts: string) => {
 
 .dashboard-bottom {
   flex-shrink: 0;
+}
+
+.center-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.center-tabs :deep(.ant-tabs-content) {
+  height: 100%;
+}
+
+.center-tabs :deep(.ant-tabs-tabpane) {
+  height: 100%;
 }
 
 @media (max-width: 1200px) {

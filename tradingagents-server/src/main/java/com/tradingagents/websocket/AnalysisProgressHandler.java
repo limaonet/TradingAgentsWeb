@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 
+import com.tradingagents.data.model.CausalGraph;
+
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -49,6 +51,41 @@ public class AnalysisProgressHandler {
         payload.put("finalDecision", finalDecision);
         messagingTemplate.convertAndSend("/topic/analysis/" + analysisId, payload);
         log.info("【WS】分析流程已全部结束 analysisId={}", analysisId);
+    }
+
+    /**
+     * 发送因果图谱
+     */
+    public void sendCausalGraph(String analysisId, CausalGraph graph) {
+        Map<String, Object> payload = createPayload("causal_graph", null, "completed", graph.getSummary(), null);
+        payload.put("graph", graph);
+        messagingTemplate.convertAndSend("/topic/analysis/" + analysisId, payload);
+        log.info("【WS】已推送因果图谱 analysisId={} nodes={}", analysisId,
+                graph.getNodes() != null ? graph.getNodes().size() : 0);
+    }
+
+    /**
+     * 推送因果图增量更新（准实时模式）
+     */
+    public void sendCausalGraphUpdate(String analysisId, CausalGraph graph, int newEventCount, LocalDateTime refreshedAt) {
+        Map<String, Object> payload = createPayload("causal_graph_update", null, "completed",
+                graph.getSummary(), null);
+        payload.put("graph", graph);
+        payload.put("newEventCount", newEventCount);
+        payload.put("refreshedAt", refreshedAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+        messagingTemplate.convertAndSend("/topic/analysis/" + analysisId, payload);
+        log.info("【WS】已推送因果图增量 analysisId={} newEvents={} nodes={}",
+                analysisId, newEventCount, graph.getNodes() != null ? graph.getNodes().size() : 0);
+    }
+
+    /**
+     * 推送实时追踪状态（轮询中/超时等）
+     */
+    public void sendCausalLiveStatus(String analysisId, boolean live, String message) {
+        Map<String, Object> payload = createPayload("causal_live_status", "causal_analyst",
+                live ? "running" : "completed", message, null);
+        payload.put("live", live);
+        messagingTemplate.convertAndSend("/topic/analysis/" + analysisId, payload);
     }
 
     /**

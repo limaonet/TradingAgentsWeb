@@ -101,8 +101,12 @@ public class SentimentAnalystAgent {
         }
         
         // 综合情感得分
-        prompt.append(String.format("【综合情感得分】%.2f (%s)\n\n", 
+        prompt.append(String.format("【综合情感得分】%.2f (%s)\n", 
                 data.getOverallSentiment(), data.getSentimentLabel()));
+        if (data.getDataQualityNote() != null && !data.getDataQualityNote().isBlank()) {
+            prompt.append("【数据质量说明】").append(data.getDataQualityNote()).append("\n");
+        }
+        prompt.append("\n");
         
         prompt.append("请提供以下分析：\n");
         prompt.append("1. 市场情绪分析（整体氛围、投资者情绪）\n");

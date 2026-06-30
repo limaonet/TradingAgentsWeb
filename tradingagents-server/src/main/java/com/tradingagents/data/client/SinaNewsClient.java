@@ -10,7 +10,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import com.tradingagents.data.model.NewsItem;
+
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -35,6 +39,23 @@ public class SinaNewsClient {
                 .build();
     }
 
+    public Mono<List<NewsItem>> getNewsItems(String symbol, int limit) {
+        if (!enabled) {
+            return Mono.just(List.of());
+        }
+
+        String sinaCode = convertToSinaCode(symbol);
+        String path = "/realstock/company/" + sinaCode + "/nc.shtml";
+
+        return webClient.get()
+                .uri(path)
+                .retrieve()
+                .bodyToMono(String.class)
+                .map(html -> parseNewsItems(html, limit))
+                .doOnError(e -> log.error("【新浪新闻】请求页面失败 标的={} 原因：{}", symbol, e.getMessage()))
+                .onErrorReturn(List.of());
+    }
+
     public Mono<Map<String, Integer>> getNewsSentimentStats(String symbol) {
         if (!enabled) {
             return Mono.empty();
@@ -57,6 +78,32 @@ public class SinaNewsClient {
             return symbol.startsWith("6") ? "sh" + symbol : "sz" + symbol;
         }
         return symbol == null ? "" : symbol.toLowerCase();
+    }
+
+    private List<NewsItem> parseNewsItems(String html, int limit) {
+        List<NewsItem> items = new ArrayList<>();
+        try {
+            Document doc = Jsoup.parse(html);
+            for (Element link : doc.select("a")) {
+                String title = link.text();
+                if (title == null || title.length() < 8 || title.length() > 80) {
+                    continue;
+                }
+                String href = link.attr("abs:href");
+                items.add(NewsItem.builder()
+                        .title(title)
+                        .url(href)
+                        .source("新浪财经")
+                        .sentimentScore(analyzeSentiment(title))
+                        .build());
+                if (items.size() >= limit) {
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            log.error("【新浪新闻】解析新闻列表失败：{}", e.getMessage());
+        }
+        return items;
     }
 
     private Map<String, Integer> parseNewsStats(String html) {

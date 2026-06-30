@@ -74,14 +74,14 @@ export function useBatchTypewriter(messages: string[], options: {
   const { speed = 30, delayBetween = 500, onMessageComplete, onAllComplete } = options
   
   const currentIndex = ref(0)
-  const displayTexts = ref<string[]>(new Array(messages.length).fill(''))
+  const displayTexts = ref<string[]>(Array.from({ length: messages.length }, () => ''))
   const isTyping = ref(false)
   
   const startBatch = () => {
     if (isTyping.value) return
     isTyping.value = true
     currentIndex.value = 0
-    displayTexts.value = new Array(messages.length).fill('')
+    displayTexts.value = Array.from({ length: messages.length }, () => '')
     
     const typeMessage = (msgIndex: number, charIndex: number) => {
       if (msgIndex >= messages.length) {

@@ -20,8 +20,9 @@ FROM mcr.microsoft.com/playwright/java:v1.40.0-jammy
 
 WORKDIR /app
 
-# 安装浏览器依赖（Chromium）
+# 安装 curl（健康检查）及 Playwright 浏览器依赖
 RUN apt-get update && apt-get install -y \
+    curl \
     libnss3 \
     libatk-bridge2.0-0 \
     libdrm2 \

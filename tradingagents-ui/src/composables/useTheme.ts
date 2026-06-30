@@ -1,4 +1,4 @@
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { theme as antTheme } from 'ant-design-vue'
 
 export type Theme = 'light' | 'dark'

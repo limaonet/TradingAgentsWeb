@@ -4,69 +4,31 @@ server:
 spring:
   application:
     name: tradingagents-server
-  
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 3000ms
+
   websocket:
     stomp:
       relay:
         host: localhost
         port: 61613
 
-# LLM Configuration - OpenRouter (国产模型)
-llm:
-  provider: openrouter
-  openrouter:
-    api-key: ${OPENROUTER_API_KEY:}
-    base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}
-    # 深度思考模型：研究经理、组合经理等复杂决策
-    chat-model: ${DEFAULT_CHAT_MODEL:minimax/minimax-m2.7}
-    # 快速思考模型：分析师等快速响应场景
-    quick-model: ${DEFAULT_QUICK_MODEL:minimax/minimax-m2.5}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
 
-# Data Source Configuration - 专注国内/港股市场
-data:
-  # 东方财富 - 主要数据源
-  eastmoney:
-    enabled: ${EASTMONEY_ENABLED:true}
-    base-url: https://push2.eastmoney.com/api
-    
-  # Tushare Pro - 备选数据源
-  tushare:
-    token: ${TUSHARE_TOKEN:}
-    base-url: https://api.tushare.pro
-    
-  # 新浪财经 - 实时行情
-  sina:
-    enabled: true
-    base-url: https://hq.sinajs.cn
-    kline-base-url: https://quotes.sina.cn
-
-  # 股票代码解析（名称 -> 代码）
-  symbol-resolver:
-    enabled: true
-    base-url: https://searchapi.eastmoney.com
-    token: ${EASTMONEY_SEARCH_TOKEN:D43BF722C8E33BDC906FB84D85E326E8}
-    
-  # 国内舆情数据源
-  sentiment:
-    # 雪球 - 投资者社区情绪
-    xueqiu:
-      enabled: true
-      base-url: https://xueqiu.com
-      # 雪球需要登录 Cookie，请从浏览器开发者工具复制
-      cookie: ${XUEQIU_COOKIE:}
-    # 东方财富股吧
-    guba:
-      enabled: true
-      base-url: https://guba.eastmoney.com
-      # 股吧需要登录 Cookie，请从浏览器开发者工具复制
-      cookie: ${GUBA_COOKIE:}
-    # 新闻舆情
-    news:
-      enabled: true
-      base-url: https://finance.sina.com.cn
-
-# Analysis Configuration
+# 分析状态存储：memory（默认）| redis
 analysis:
+  storage: ${ANALYSIS_STORAGE:memory}
+  state-ttl-days: ${ANALYSIS_STATE_TTL_DAYS:7}
   max-debate-rounds: 1
   max-risk-discuss-rounds: 1
   default-analysts:
@@ -75,7 +37,57 @@ analysis:
     - news
     - fundamentals
 
-# Logging
+# API 安全（可选）：设置 API_KEY 后需在请求头携带 X-API-Key
+security:
+  api-key: ${API_KEY:}
+  rate-limit-per-minute: ${API_RATE_LIMIT_PER_MINUTE:60}
+
+# 因果链准实时追踪（轮询新闻/公告，增量更新图谱）
+causal:
+  live:
+    enabled: ${CAUSAL_LIVE_ENABLED:true}
+    poll-interval-ms: ${CAUSAL_LIVE_POLL_MS:60000}
+    min-refresh-interval-ms: ${CAUSAL_LIVE_MIN_REFRESH_MS:120000}
+    max-session-hours: ${CAUSAL_LIVE_MAX_HOURS:2}
+
+# LLM Configuration - OpenRouter (国产模型)
+llm:
+  provider: openrouter
+  openrouter:
+    api-key: ${OPENROUTER_API_KEY:}
+    base-url: ${OPENROUTER_BASE_URL:[REDACTED]}
+    chat-model: ${DEFAULT_CHAT_MODEL:[REDACTED]}
+    quick-model: ${DEFAULT_QUICK_MODEL:minimax/minimax-m2.5}
+
+# Data Source Configuration - 专注国内/港股市场
+data:
+  eastmoney:
+    enabled: ${EASTMONEY_ENABLED:true}
+    base-url: https://push2.eastmoney.com/api
+  tushare:
+    token: ${TUSHARE_TOKEN:}
+    base-url: https://api.tushare.pro
+  sina:
+    enabled: true
+    base-url: https://hq.sinajs.cn
+    kline-base-url: https://quotes.sina.cn
+  symbol-resolver:
+    enabled: true
+    base-url: https://searchapi.eastmoney.com
+    token: ${EASTMONEY_SEARCH_TOKEN:D43BF722C8E33BDC906FB84D85E326E8}
+  sentiment:
+    xueqiu:
+      enabled: true
+      base-url: https://xueqiu.com
+      cookie: ${XUEQIU_COOKIE:}
+    guba:
+      enabled: true
+      base-url: https://guba.eastmoney.com
+      cookie: ${GUBA_COOKIE:}
+    news:
+      enabled: true
+      base-url: https://finance.sina.com.cn
+
 logging:
   level:
     com.tradingagents: DEBUG

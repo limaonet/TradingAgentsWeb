@@ -1,139 +1,81 @@
 # TradingAgents Web
 
-基于 Vue 3 + Spring Boot + LangChain4j 的 TradingAgents Web 版本，将原 CLI 工具重构为现代化的 Web 应用。
+基于 Vue 3 + Spring Boot + LangChain4j 的 **多智能体股票研究与决策辅助** Web 应用，面向 A 股市场。
 
 ## 项目简介
 
-TradingAgents Web 是一套**多智能体（Multi-Agent）股票研究与决策辅助**的 Web 应用：用户输入标的与日期后，系统会并行调用多位「分析师」Agent 拉取行情与基本面等数据，再经研究经理、交易员、风控与组合经理等角色协作，产出结构化的投资分析与决策建议。前端负责交互、流程与图谱展示；后端负责编排 LLM、对接数据源，并通过 WebSocket 推送进度与中间结果。
+用户输入股票代码或名称后，系统并行运行市场、情绪、基本面分析师，再经**因果链分析**、研究经理、交易员、风控辩论与组合经理协作，产出结构化投资分析与最终决策。前端通过 WebSocket 实时展示进度；后端通过公开数据源抓取行情与新闻，无需额外 token。
 
-## 作用与价值
+> **说明**：分析结论由大语言模型生成，仅供研究与学习参考，不构成投资建议。
 
-- **把 CLI 能力产品化**：将原先命令行中的分析流水线搬到浏览器里，降低使用门槛，便于演示、协作与留存历史分析。
-- **全流程可观测**：用知识图谱与流水线视图呈现 Agent 分工、辩论与综合过程，而不是只输出一段黑盒文字。
-- **可插拔的数据与模型**：支持多种 LLM 与行情数据源（见下文配置），便于按环境切换或扩展。
-- **工程化落地**：前后端分离、容器化部署，适合作为智能投研、教学演示或二次开发的基座。
+## 功能特性
 
-> **说明**：本项目的分析结论由大语言模型生成，仅供研究与学习参考，不构成投资建议。使用真实行情与交易接口时请遵守当地法规与数据服务条款。
+| 能力 | 说明 |
+|------|------|
+| **多 Agent 流水线** | 9 个 LangChain4j Agent，5 个阶段编排 |
+| **因果链分析** | 基于真实新闻构建「事件→因子→指标→结果」图谱，支持向上追因 / 向下看果 |
+| **真实数据** | 东财数据中心财务、新浪/东财新闻、新浪 K 线等公开接口 |
+| **实时推送** | STOMP WebSocket 推送进度、报告、因果图 |
+| **状态持久化** | Docker 部署下 Redis 保存分析记录（默认 7 天） |
+| **容器化部署** | Docker Compose + Nginx，含健康检查 |
 
 ## 技术栈
 
 ### 前端
-- **Vue 3** + TypeScript + Vite
-- **Ant Design Vue 3** - UI 组件库
-- **@antv/g6** - 知识图谱可视化
-- **Pinia** - 状态管理
-- **WebSocket** - 实时通信
+- Vue 3 + TypeScript + Vite
+- Ant Design Vue 4
+- Pinia、Vue Router
+- @antv/g6（因果链图谱）
+- @stomp/stompjs（WebSocket）
 
 ### 后端
-- **Spring Boot 3.x** + Java 17
-- **LangChain4j** - LLM 编排框架
-- **WebSocket (STOMP)** - 实时推送
-- **WebFlux** - 响应式 HTTP 客户端
+- Spring Boot 3.2 + Java 17
+- LangChain4j + OpenRouter
+- WebSocket (STOMP)、WebFlux
+- Redis（可选，生产环境持久化）
+- Jsoup（新闻抓取）
 
 ## 项目结构
 
 ```
-tradingagents-web/
-├── tradingagents-ui/          # Vue 前端
-│   ├── src/
-│   │   ├── components/        # 组件
-│   │   ├── views/             # 页面
-│   │   ├── composables/       # 组合式函数
-│   │   ├── styles/            # 样式文件
-│   │   └── api/               # API 接口
-│   └── package.json
-├── tradingagents-server/      # Spring Boot 后端
-│   ├── src/main/java/
-│   │   └── com/tradingagents/
-│   │       ├── controller/    # 控制器
-│   │       ├── service/       # 服务层
-│   │       ├── agents/        # LangChain4j Agents
-│   │       ├── data/          # 数据获取层
-│   │       └── model/         # 领域模型
-│   └── pom.xml
-└── docker/                    # Docker 部署文件
-    ├── docker-compose.yml
-    ├── Dockerfile-frontend
-    ├── Dockerfile-backend
-    └── nginx.conf
+TradingAgentsWeb/
+├── tradingagents-ui/       # Vue 前端
+├── tradingagents-server/   # Spring Boot 后端
+├── docker/                 # Docker Compose + Nginx
+├── docs/
+│   ├── analysis-pipeline.md  # 流水线详细文档
+│   └── screenshots.md
+└── .github/workflows/ci.yml
 ```
 
-## 功能特性
-
-1. **美观的 UI 设计**
-   - 基于 Ant Design Vue 的现代化界面
-   - 支持明暗主题切换
-   - 响应式布局，适配移动端
-
-2. **知识图谱可视化**
-   - Agent 协作流程图
-   - 因果推断关系图
-   - 决策路径图
-   - 数据血缘图
-
-3. **实时分析进度**
-   - WebSocket 实时推送
-   - 动态流程图展示
-   - 实时消息日志
-
-4. **完整的分析流程**
-   - 分析师团队（市场/情绪/新闻/基本面）
-   - 研究团队（牛熊辩论）
-   - 交易员
-   - 风控团队（三方辩论）
-   - 组合经理
-
-## 界面预览
-
-| 整页 | 主内容区 | 底部流程 |
-|:---:|:---:|:---:|
-| ![仪表盘](docs/images/screenshot-dashboard-full.png) | ![主网格](docs/images/screenshot-main-grid.png) | ![流程条](docs/images/screenshot-bottom-pipeline.png) |
-
-更多说明见 **[docs/screenshots.md](docs/screenshots.md)**。支持通过 `http://localhost:5173/?analysisId=<id>` 打开指定分析（需后端仍有该任务缓存）。
-
-## 分析流程图（GitHub 展示）
-
-仓库根目录与 [docs/analysis-pipeline.md](docs/analysis-pipeline.md) 使用 **Mermaid** 描述流水线；在 GitHub 打开该 Markdown 即可直接看到渲染后的流程图（无需额外服务）。
-
-从**用户输入**到**最终决策**的缩略图如下（配色与职责说明见完整文档）。
+## 分析流水线
 
 ```mermaid
 flowchart LR
-    classDef user fill:#e8f5e9,stroke:#1b5e20,color:#1b3310
-    classDef fe fill:#e3f2fd,stroke:#0d47a1,color:#0d1740
-    classDef sys fill:#fce4ec,stroke:#880e4f,color:#3e0d24
     classDef ag fill:#fff8e1,stroke:#e65100,color:#3e2723
-
-    U["用户<br/>代码/名称 + 日期"]:::user
-    FE["前端<br/>POST start + WS 订阅"]:::fe
-    IN["入口<br/>解析代码 · 建任务"]:::sys
+    classDef sys fill:#fce4ec,stroke:#880e4f,color:#3e0d24
 
     subgraph P1["Phase 1 并行"]
-        M1["市场<br/>技术面"]:::ag
-        M2["情绪<br/>舆情面"]:::ag
-        M3["基本面<br/>财务估值"]:::ag
+        M1["市场分析师"]:::ag
+        M2["情绪分析师"]:::ag
+        M3["基本面分析师"]:::ag
     end
     X{"报告到齐"}:::sys
-
-    RM["研究经理<br/>投资计划"]:::ag
-    TR["交易员<br/>交易计划"]:::ag
-
-    subgraph P4["Phase 4"]
-        R1["激进风控"]:::ag
-        R2["保守风控"]:::ag
-        Y{"观点到齐"}:::sys
-        R3["中立风控<br/>折中综合"]:::ag
+    CA["因果分析师"]:::ag
+    RM["研究经理"]:::ag
+    TR["交易员"]:::ag
+    subgraph P4["Phase 4 风控"]
+        R1["激进"]:::ag
+        R2["保守"]:::ag
+        R3["中立"]:::ag
     end
+    PM["组合经理"]:::ag
 
-    PM["组合经理<br/>最终决策"]:::ag
-
-    U --> FE --> IN --> M1 & M2 & M3
-    M1 & M2 & M3 --> X --> RM --> TR
-    TR --> R1 & R2
-    R1 & R2 --> Y --> R3 --> PM
+    M1 & M2 & M3 --> X --> CA --> RM --> TR
+    TR --> R1 & R2 --> R3 --> PM
 ```
 
-更细的**全链路大图**、**每个 Agent 的 Java 类 / 输入输出 / WS 字段说明**与**时序图**见 **[docs/analysis-pipeline.md](docs/analysis-pipeline.md)**（文档开头的 **Agent 一览** 表）。
+完整 Agent 表、时序图与 WS 字段说明见 **[docs/analysis-pipeline.md](docs/analysis-pipeline.md)**。
 
 ## 快速开始
 
@@ -141,32 +83,28 @@ flowchart LR
 - Node.js 20+
 - Java 17+
 - Maven 3.9+
-- Docker (可选)
+- OpenRouter API Key（必需，用于 LLM）
+- Docker + Redis（可选，用于生产部署）
 
-### 1. 克隆项目
-
-```bash
-git clone <repository-url>
-cd tradingagents-web
-```
-
-### 2. 配置环境变量
+### 1. 克隆并配置
 
 ```bash
+git clone https://github.com/limaonet/TradingAgentsWeb.git
+cd TradingAgentsWeb
 cp .env.example .env
-# 编辑 .env 文件，填入你的 API Keys
+# 编辑 .env，至少填入 OPENROUTER_API_KEY
 ```
 
-### 3. 启动后端
+### 2. 启动后端
 
 ```bash
 cd tradingagents-server
 mvn spring-boot:run
 ```
 
-后端服务将在 http://localhost:8080 启动
+后端：http://localhost:8080
 
-### 4. 启动前端
+### 3. 启动前端
 
 ```bash
 cd tradingagents-ui
@@ -174,58 +112,93 @@ npm install
 npm run dev
 ```
 
-前端服务将在 http://localhost:5173 启动
+前端：http://localhost:5173
 
-### 5. Docker 部署
+### 4. Docker 部署（含 Redis 持久化）
 
 ```bash
-# 构建并启动所有服务
-docker-compose -f docker/docker-compose.yml up -d
-
-# 查看日志
-docker-compose -f docker/docker-compose.yml logs -f
-
-# 停止服务
-docker-compose -f docker/docker-compose.yml down
+# .env 中配置 OPENROUTER_API_KEY
+docker compose -f docker/docker-compose.yml up -d --build
+docker compose -f docker/docker-compose.yml logs -f
 ```
+
+访问 http://localhost
 
 ## 配置说明
 
-### LLM 配置
+### LLM（OpenRouter）
 
-在 `tradingagents-server/src/main/resources/application.yml` 中配置：
-
-```yaml
-llm:
-  provider: openai  # 或 anthropic, google
-  openai:
-    api-key: ${OPENAI_API_KEY}
-    model: gpt-4
+```bash
+OPENROUTER_API_KEY=your_key
+DEFAULT_CHAT_MODEL=openai/gpt-4o          # 深度模型（研究经理等）
+DEFAULT_QUICK_MODEL=minimax/minimax-m2.5  # 快速模型（分析师等）
 ```
 
-### 数据源配置
+### 分析状态存储
 
-支持 Tushare（A股）、Yahoo Finance、Alpha Vantage：
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `ANALYSIS_STORAGE` | `memory` | 本地开发用内存；Docker prod 自动设为 `redis` |
+| `REDIS_HOST` | `localhost` | Redis 地址 |
+| `ANALYSIS_STATE_TTL_DAYS` | `7` | 分析记录保留天数 |
 
-```yaml
-data:
-  tushare:
-    token: ${TUSHARE_TOKEN}
-  alpha-vantage:
-    api-key: ${ALPHA_VANTAGE_API_KEY}
+### 数据源
+
+当前已接入的**公开数据源**（无需 token）：
+
+- 东方财富数据中心：财务指标、估值、新闻搜索
+- 新浪财经：K 线、个股新闻
+- 东方财富 / 新浪：实时行情兜底
+
+可选（需自行配置 Cookie）：
+
+```bash
+XUEQIU_COOKIE=...   # 雪球舆情增强
+GUBA_COOKIE=...     # 股吧舆情增强
 ```
 
-## 开发计划
+## 界面说明
+
+- **左侧**：三位分析师（市场 / 情绪 / 基本面）状态卡片
+- **中间 Tab**：风控辩论 | **因果链**（可点击节点，向上追因 / 向下看果）
+- **右侧**：组合经理最终决策
+- **底部**：分析流水线进度条
+
+支持深链接恢复分析：
+
+```
+http://localhost:5173/?analysisId=<uuid>
+```
+
+> Docker 部署下分析记录存于 Redis（7 天）；本地 memory 模式重启后丢失。
+
+## 开发
+
+```bash
+# 后端测试
+cd tradingagents-server
+mvn test -Dtest=CausalGraphParserTest,InMemoryAnalysisStateStoreTest,EastMoneyDataCenterClientTest
+
+# 前端检查
+cd tradingagents-ui
+npm run type-check && npm run lint && npm run build
+```
+
+CI 在每次 push / PR 时自动运行（见 `.github/workflows/ci.yml`）。
+
+## 开发进度
 
 - [x] 项目基础架构
-- [x] 前端主题系统和组件库
-- [x] 知识图谱可视化
-- [x] Docker 容器化
-- [ ] 数据层 Java 实现
-- [ ] LangChain4j Agent 实现
-- [ ] WebSocket 实时通信
-- [ ] 后端业务逻辑
+- [x] LangChain4j 多 Agent 流水线
+- [x] WebSocket 实时推送
+- [x] 数据层（东财 / 新浪公开 API）
+- [x] 因果链分析与可视化
+- [x] Redis 分析状态持久化
+- [x] Docker 部署与健康检查
+- [x] GitHub Actions CI
+- [ ] 营收增长率同比计算优化
+- [ ] 用户鉴权与限流
 
 ## 许可证
 
-MIT License
+[MIT License](LICENSE)
